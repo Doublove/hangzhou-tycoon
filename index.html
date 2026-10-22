@@ -131,6 +131,16 @@
   #foot{text-align:center;font-size:10px;color:#9A9184;line-height:1.6;padding:2px 0 6px}
   #foot a{color:#9A9184;text-decoration:none;border-bottom:1px dotted #C4BCAC;margin:0 3px}
   #foot a:active{color:var(--teal)}
+  #tip{position:fixed;left:8px;right:8px;top:0;z-index:9999;background:#2A2420;color:#fff;
+       font-size:11.5px;line-height:1.55;padding:10px 12px;border-radius:11px;
+       box-shadow:0 8px 22px rgba(0,0,0,.3);pointer-events:none;opacity:0;transition:opacity .12s}
+  #tip.show{opacity:1}
+  #tip b{display:block;font-size:12.5px;margin-bottom:2px}
+  #tip .t-meta{color:#C9BFAE;font-size:10.5px;margin-bottom:5px}
+  .ev{display:flex;gap:8px;font-size:11.5px;padding:5px 0;border-bottom:1px dashed #EDE5D6;line-height:1.45}
+  .ev:last-child{border-bottom:none}
+  .ev .ev-n{font-weight:700;white-space:nowrap;color:var(--ink);min-width:66px}
+  .ev .ev-d{color:#6B6156}
 </style>
 </head>
 <body>
@@ -139,7 +149,7 @@
     <div class="hud-top">
       <div>
         <div id="date">2010 年 1 月</div>
-        <div id="chapter">第一章 · 限购前夜　<span class="badge">灰盒 v0.2</span></div>
+        <div id="chapter">第一章 · 限购前夜　<span class="badge">灰盒 v0.3</span></div>
       </div>
       <div id="turnInfo">第 1 / 48 月</div>
     </div>
@@ -168,6 +178,7 @@
 
 <div id="modal" class="hidden"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
+<div id="tip"></div>
 <div id="loadBar" class="hidden">读取存档…</div>
 
 <script>
@@ -249,33 +260,40 @@ const PLAYERS = [
 
 // 历史事件（m = 月份序号，2010.01 为 0）
 const EVENTS = [
-  { m:2,  name:"热钱涌入", desc:"投资客扫楼，城东、城北板块热度 +20",
+  { m:2,  key:"hotmoney", kind:"event", name:"热钱涌入", desc:"投资客扫楼，城东、城北板块热度 +20",
+    detail:"城东、城北 板块热度 +20，该区域地价与过路费同步上涨。永久生效。",
     fn(){ heatAdd(["城东","城北"], 20); } },
-  { m:6,  name:"地铁规划落地", desc:"城东、滨江沿线热度 +15",
+  { m:6,  key:"metroplan", kind:"event", name:"地铁规划落地", desc:"城东、滨江沿线热度 +15",
+    detail:"城东、滨江 板块热度 +15。永久生效。",
     fn(){ heatAdd(["城东","滨江"], 15); } },
-  { m:13, name:"限购令落地", desc:"持有 2 套以上暂停买地，持续 12 个月",
+  { m:13, key:"limitBuy", kind:"policy", name:"限购令", desc:"持有 2 套以上暂停买地，持续 12 个月",
+    detail:"名下持有 2 套及以上时，不能再买入新地块。到期自动解除。",
     policy:"limitBuy", until:25 },
-  { m:14, name:"限贷收紧", desc:"贷款上限降至净资产 40%，利率上浮至 0.75%",
+  { m:14, key:"tightLoan", kind:"policy", name:"限贷收紧", desc:"贷款上限降至净资产 40%，利率上浮至 0.75%",
+    detail:"贷款上限从净资产 60% 降至 40%，月息从 0.60% 上调至 0.75%。到期自动解除。",
     policy:"tightLoan", until:26 },
-  { m:21, name:"降价潮", desc:"全城地价承压，各板块热度 -20",
+  { m:21, key:"pricedrop", kind:"event", name:"降价潮", desc:"全城地价承压，各板块热度 -20",
+    detail:"全城板块热度 -20，所有地块的地价、过路费与月租金同步下调。永久生效。",
     fn(){ heatAdd(null, -20); } },
-  { m:34, name:"地铁 1 号线开通", desc:"城东、滨江热度 +25，沿线地块等级上限 +1",
+  { m:34, key:"metro1", kind:"event", name:"地铁 1 号线开通", desc:"城东、滨江热度 +25，沿线地块等级上限 +1",
+    detail:"城东、滨江 板块热度 +25，沿线地块等级上限 +1（最高 Lv5）。永久生效。",
     fn(){ heatAdd(["城东","滨江"], 25); raiseCap(["城东","滨江"]); } },
-  { m:38, name:"限售政策", desc:"持有不满 3 个月不得出售，持续 12 个月",
+  { m:38, key:"noSell", kind:"policy", name:"限售政策", desc:"持有不满 3 个月不得出售，持续 12 个月",
+    detail:"持有不满 3 个月的地块不得卖出，被动卖地同样受限。到期自动解除。",
     policy:"noSell", until:50 }
 ];
 
 const CHANCE = [
-  { t:"拆迁通知", act:p => { p.cash += 180; return "获得补偿 180 万"; } },
-  { t:"老破小改造", act:p => {
+  { t:"拆迁通知", d:"自有地块被征收，补偿 180 万", act:p => { p.cash += 180; return "获得补偿 180 万"; } },
+  { t:"老破小改造", d:"随机一块自有地块免费升一级", act:p => {
       const c = p.lands.filter(x => x.lv < x.maxLv);
       if (!c.length) return "没有可升级的地块";
       const one = c[rnd(c.length)]; one.lv++;
       return `${one.name} 免费升到 Lv${one.lv}`;
   }},
-  { t:"茶水费", act:p => { p.cash += 60; return "现金 +60 万"; } },
-  { t:"中介佣金", act:p => { p.cash += 45; return "现金 +45 万"; } },
-  { t:"法拍捡漏", act:p => {
+  { t:"茶水费", d:"现金 +60 万", act:p => { p.cash += 60; return "现金 +60 万"; } },
+  { t:"中介佣金", d:"现金 +45 万", act:p => { p.cash += 45; return "现金 +45 万"; } },
+  { t:"法拍捡漏", d:"以 7 折买入一块无主地块", act:p => {
       const free = state.cells.filter(c => c.t === "land" && !c.owner && c.unlocked);
       if (!free.length) return "没有在拍的地块";
       const c = free[rnd(free.length)];
@@ -287,20 +305,20 @@ const CHANCE = [
 ];
 
 const FATE = [
-  { t:"业主维权", act:p => {
+  { t:"业主维权", d:"有房者现金 -40 万", act:p => {
       if (!p.lands.length) return "无房一身轻，与你无关";
       p.cash -= 40; return "现金 -40 万";
   }},
-  { t:"房贷利率上调", act:p => { p.cash -= 55; return "现金 -55 万"; } },
-  { t:"土拍熔断", act:p => { p.skipBuy = true; return "本回合无法买地"; } },
-  { t:"股市跳水", act:p => { p.cash -= 70; return "现金 -70 万"; } },
-  { t:"中介带看", act:p => { p.cash += 30; return "现金 +30 万"; } }
+  { t:"房贷利率上调", d:"现金 -55 万", act:p => { p.cash -= 55; return "现金 -55 万"; } },
+  { t:"土拍熔断", d:"本回合无法买地", act:p => { p.skipBuy = true; return "本回合无法买地"; } },
+  { t:"股市跳水", d:"现金 -70 万", act:p => { p.cash -= 70; return "现金 -70 万"; } },
+  { t:"中介带看", d:"现金 +30 万", act:p => { p.cash += 30; return "现金 +30 万"; } }
 ];
 
 /* ---------------- 状态 ---------------- */
 const state = {
   month:0, turnIdx:0, turnCount:0, cells:[], players:[],
-  policies:{}, busy:false, over:false, fired:{}
+  mods:[], busy:false, over:false, fired:{}
 };
 
 const SAVE_KEY = "hzmonopoly_v02";
@@ -332,7 +350,7 @@ function initGame(loadSave){
   }));
 
   state.month = 0; state.turnIdx = 0; state.turnCount = 0; state.busy = false; state.over = false;
-  state.policies = {}; state.fired = {};
+  state.mods = []; state.fired = {};
 
   renderBoard(); renderHUD();
   $("#log").innerHTML = "";
@@ -432,12 +450,16 @@ function renderHUD(){
 
   const pol = $("#policy");
   pol.innerHTML = "";
-  const active = Object.keys(state.policies).filter(k => state.policies[k]);
+  const active = state.mods.filter(m => m.until == null || state.month < m.until);
   if (active.length){
-    active.forEach(k => {
+    active.forEach(m => {
       const c = document.createElement("span");
-      c.className = "chip";
-      c.textContent = { limitBuy:"限购中", tightLoan:"限贷中", noSell:"限售中" }[k] || k;
+      c.className = "chip" + (m.kind === "event" ? " info" : "");
+      const rest = m.until == null ? "" : ` · 剩${Math.max(0, m.until - state.month)}月`;
+      c.textContent = m.name + rest;
+      c.onmouseenter = () => showTip(c, m.key);
+      c.onmouseleave = hideTip;
+      c.onclick = ev => { ev.stopPropagation(); showTip(c, m.key); };
       pol.appendChild(c);
     });
   } else {
@@ -467,6 +489,24 @@ function log(msg, type=""){
   box.scrollTop = box.scrollHeight;
 }
 
+function showTip(el, key){
+  const m = state.mods.find(x => x.key === key);
+  if (!m) return;
+  const tip = $("#tip");
+  const life = m.until == null
+    ? "永久生效"
+    : `剩余 ${Math.max(0, m.until - state.month)} 个月（${monthLabel(m.until)} 解除）`;
+  tip.innerHTML = `<b>${m.name}</b><div class="t-meta">${monthLabel(m.start)} 起 · ${life}</div>${m.detail}`;
+  tip.classList.add("show");
+
+  // 固定贴在政策条正下方，避免被棋盘遮挡或超出屏幕
+  const bar = document.getElementById("hud").getBoundingClientRect();
+  tip.style.top = (bar.bottom + 6) + "px";
+}
+function hideTip(){ $("#tip").classList.remove("show"); }
+document.addEventListener("click", hideTip);
+window.addEventListener("scroll", hideTip, true);
+
 let toastTimer;
 function toast(msg){
   const t = $("#toast");
@@ -485,7 +525,9 @@ const upCost = c => Math.round(value(c) * CFG.upRate);
 const netWorth = p => Math.round(
   p.cash + p.lands.reduce((s, c) => s + value(c) * (1 + 0.12 * c.lv), 0) - p.debt
 );
-const loanCap = p => Math.max(0, Math.round(netWorth(p) * (state.policies.tightLoan ? CFG.loanCapTight : CFG.loanCap) - p.debt));
+const loanCap = p => Math.max(0, Math.round(netWorth(p) * (hasPolicy("tightLoan") ? CFG.loanCapTight : CFG.loanCap) - p.debt));
+// 政策是否生效（mods 里存在且未到期）
+const hasPolicy = k => state.mods.some(m => m.key === k && (m.until == null || state.month < m.until));
 
 function heatAdd(regions, delta){
   state.cells.forEach(c => {
@@ -505,7 +547,27 @@ function closeSheet(){ $("#modal").classList.add("hidden"); }
 
 function showCell(c){
   if (c.t !== "land"){
-    openSheet(`<h3>${c.name}</h3><p class="sub">功能格</p>
+    let body = "";
+    if (c.t === "start"){
+      body = `<p class="sub">每次经过领月供 <b>120 万</b>。这是你唯一的稳定现金流，别把它当成理所当然。</p>`;
+    } else if (c.t === "chance" || c.t === "fate"){
+      const deck = c.t === "chance" ? CHANCE : FATE;
+      const rows = deck.map(k => `<div class="ev"><span class="ev-n">${k.t}</span><span class="ev-d">${k.d}</span></div>`).join("");
+      body = `<p class="sub">停在这里会从下面 ${deck.length} 张里随机抽一张：</p>${rows}`;
+    } else if (c.t === "bank"){
+      const p = state.players[0];
+      const rate = (hasPolicy("tightLoan") ? CFG.loanRateTight : CFG.loanRate) * 100;
+      body = `<p class="sub">可以在这里借钱或还钱。负债每月计息，并计入净资产。</p>
+        <div class="kv"><span>当前月息</span><b>${rate.toFixed(2)}%</b></div>
+        <div class="kv"><span>你的可借额度</span><b>${fmt(loanCap(p))} 万</b></div>
+        <div class="kv"><span>额度规则</span><b>净资产 × ${hasPolicy("tightLoan") ? "40%" : "60%"}</b></div>
+        <p class="sub" style="margin-top:8px">限贷期间额度与利率都会变差，加杠杆前先看政策条。</p>`;
+    } else if (c.t === "tax"){
+      body = `<p class="sub">每次经过按净资产 <b>1.2%</b> 缴税。资产越重税越疼，这是对囤地的惩罚。</p>`;
+    } else {
+      body = `<p class="sub">每月月初自动播报历史事件与政策。停在这里没有额外效果，但政策条会更新。</p>`;
+    }
+    openSheet(`<h3>${c.name}</h3>${body}
       <div class="btns"><button class="btn-sub" onclick="closeSheet()">知道了</button></div>`);
     return;
   }
@@ -517,7 +579,7 @@ function showCell(c){
   }
   const mine = c.owner && c.owner.human && !state.busy && state.turnIdx === c.owner.id;
   const sellPrice = Math.round(value(c) * CFG.sellRate);
-  const canSell = mine && !(state.policies.noSell && state.month - c.boughtAt < 3);
+  const canSell = mine && !(hasPolicy("noSell") && state.month - c.boughtAt < 3);
   openSheet(`
     <h3>${c.name} <span class="badge" style="background:${REGION[c.region].color};color:#fff">${c.region}</span></h3>
     <p class="sub">等级上限 Lv${c.maxLv}　热度 ${c.heat}</p>
@@ -584,7 +646,7 @@ function askUpgrade(p, c){
 function askBank(p){
   return new Promise(res => {
     const cap = loanCap(p);
-    const rate = state.policies.tightLoan ? CFG.loanRateTight : CFG.loanRate;
+    const rate = hasPolicy("tightLoan") ? CFG.loanRateTight : CFG.loanRate;
     openSheet(`
       <h3>银行</h3>
       <p class="sub">月息 ${(rate * 100).toFixed(2)}%　可借额度 ${fmt(cap)} 万</p>
@@ -639,7 +701,7 @@ async function landOn(p, c){
 
     if (!c.owner){
       if (p.skipBuy){ p.skipBuy = false; log(`<b>${p.name}</b> 遇土拍熔断，本回合不能买地`, ""); return; }
-      if (state.policies.limitBuy && p.lands.length >= 2){
+      if (hasPolicy("limitBuy") && p.lands.length >= 2){
         log(`<b>${p.name}</b> 名下已有 2 套，限购中不能买地`, "bad");
         return;
       }
@@ -733,7 +795,7 @@ function doRepay(p, amt){
 }
 
 function sellLand(p, c){
-  if (state.policies.noSell && state.month - c.boughtAt < 3) return false;
+  if (hasPolicy("noSell") && state.month - c.boughtAt < 3) return false;
   const price = Math.round(value(c) * CFG.sellRate);
   p.cash += price;
   p.lands = p.lands.filter(x => x !== c);
@@ -778,8 +840,8 @@ function aiBuy(p, c){
   if (p.trait === "情报") bias = 1.1;
 
   // 政策收紧时更谨慎
-  if (state.policies.limitBuy && p.lands.length >= 2) return false;
-  if (state.policies.tightLoan && p.cash - price < reserve * 1.4) return false;
+  if (hasPolicy("limitBuy") && p.lands.length >= 2) return false;
+  if (hasPolicy("tightLoan") && p.cash - price < reserve * 1.4) return false;
 
   return (c.heat / 55) * bias * (0.85 + Math.random() * 0.35) > 0.85;
 }
@@ -821,25 +883,29 @@ async function endMonth(){
     const r = p.lands.reduce((s, c) => s + rent(c), 0);
     if (r > 0){ p.cash += r; log(`<b>${p.name}</b> 收租 <b>+${fmt(r)}</b> 万`, "good"); }
     if (p.debt > 0){
-      const rate = state.policies.tightLoan ? CFG.loanRateTight : CFG.loanRate;
+      const rate = hasPolicy("tightLoan") ? CFG.loanRateTight : CFG.loanRate;
       const it = Math.round(p.debt * rate);
       p.cash -= it;
       log(`<b>${p.name}</b> 付利息 <b>-${fmt(it)}</b> 万`, "bad");
     }
   });
 
-  // 历史事件
+  // 历史事件：生效时登记到 mods，供政策条悬停查看
   EVENTS.forEach(e => {
     if (e.m === state.month && !state.fired[e.name]){
       state.fired[e.name] = true;
-      if (e.policy){ state.policies[e.policy] = true; }
       if (e.fn) e.fn();
+      state.mods.push({
+        key: e.key, kind: e.kind, name: e.name, detail: e.detail,
+        start: state.month, until: e.until == null ? null : e.until
+      });
       log(`<b>【${monthLabel(e.m)} ${e.name}】</b>${e.desc}`, "sys");
       toast(`${e.name}：${e.desc}`);
     }
-    if (e.until === state.month && state.policies[e.policy]){
-      state.policies[e.policy] = false;
-      log(`<b>${e.name} 到期解除</b>`, "sys");
+    if (e.until === state.month){
+      const before = state.mods.length;
+      state.mods = state.mods.filter(m => m.key !== e.key);
+      if (state.mods.length !== before) log(`<b>${e.name} 到期解除</b>`, "sys");
     }
   });
 
@@ -901,7 +967,7 @@ function save(){
   if (SIM) return;
   try {
     const data = {
-      month: state.month, turnIdx: state.turnIdx, policies: state.policies, fired: state.fired,
+      month: state.month, turnIdx: state.turnIdx, mods: state.mods, fired: state.fired,
       cells: state.cells.map(c => ({ idx:c.idx, owner:c.owner ? c.owner.id : null, lv:c.lv, heat:c.heat, maxLv:c.maxLv, unlocked:c.unlocked, boughtAt:c.boughtAt })),
       players: state.players.map(p => ({ id:p.id, cash:p.cash, debt:p.debt, pos:p.pos, bankrupt:p.bankrupt, lands:p.lands.map(c => c.idx) }))
     };
@@ -919,7 +985,7 @@ function load(){
 
     initGame();
     state.month = d.month; state.turnIdx = d.turnIdx;
-    state.policies = d.policies || {}; state.fired = d.fired || {};
+    state.mods = d.mods || []; state.fired = d.fired || {};
     d.cells.forEach(s => {
       const c = state.cells[s.idx];
       if (!c) return;
