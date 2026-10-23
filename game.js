@@ -245,6 +245,16 @@ function renderHUD(){
     pol.appendChild(w);
   }
 
+  // 清算警示
+  if (state.started && meP && !meP.bankrupt && meP.liquidating){
+    const w = document.createElement("span");
+    w.className = "chip";
+    w.style.cssText = "background:#8E2A20;color:#fff";
+    w.textContent = `清算中 · 剩 ${Math.max(0, meP.liqDeadline - state.absMonth)} 月`;
+    w.onclick = e => { e.stopPropagation(); toast("还清债务才能退出清算，否则期满出局"); };
+    pol.appendChild(w);
+  }
+
   // 旧环资产
   const legacy = $("#legacy");
   if (legacy){
@@ -574,15 +584,15 @@ async function roll(){
 
   if (p.charId === "bao" && !p.skipBao){ boostByBao(p); p.skipBao = true; }
 
-  const d1 = 1 + rnd(6), d2 = 1 + rnd(6);
-  const sum = d1 + d2;
+  const d1 = 1 + rnd(6);          // V1.3：改为单骰，避免绕圈过快
+  const sum = d1;
 
   // 监狱：掷出偶数出狱；连续 3 次未掷出则第 4 回合强制出狱
   if (p.inJail){
     const forced = p.jailFail >= CFG.jailFailMax;
     const even = sum % 2 === 0;
     if (forced || even){
-      const why = forced ? "关押期满，依法释放" : `掷出 ${d1}+${d2}=${sum}（偶数），获释`;
+      const why = forced ? "关押期满，依法释放" : `掷出 ${d1}（偶数），获释`;
       p.inJail = false; p.jailFail = 0;
       log(`<b>${p.name}</b> ${why}，前进 ${sum} 格`, "good");
       toast(forced ? "关押期满" : "掷出偶数，出狱");
@@ -592,14 +602,14 @@ async function roll(){
       await settle(p);
     } else {
       p.jailFail++;
-      log(`<b>${p.name}</b> 掷出 ${d1}+${d2}=${sum}（奇数），继续关押（${p.jailFail}/${CFG.jailFailMax}）`, "bad");
+      log(`<b>${p.name}</b> 掷出 ${d1}（奇数），继续关押（${p.jailFail}/${CFG.jailFailMax}）`, "bad");
       toast("奇数，继续关押");
       await sleep(420);
     }
     state.busy = false; nextTurn(); return;
   }
 
-  toast(`${p.name} 掷出 ${d1} + ${d2} = ${sum}`);
+  toast(`${p.name} 掷出 ${sum}`);
   await sleep(380);
 
   await move(p, sum);
@@ -708,7 +718,7 @@ async function landOn(p, c){
   if (c.t === "jail"){ sendToJail(p, "踩进监狱"); return; }
 
   if (c.t === "scenic"){
-    let n = 1 + rnd(6);
+    let n = rollScenicStay();
     if (p.charId === "lian") n = Math.ceil(n / 2);   // 阿莲：景区停留减半
     p.scenicTurns = n; p.scenicName = c.fullName || c.name;
     log(`<b>${p.name}</b> 去了${c.fullName || c.name}，掷出 ${n}，要停留 ${n} 回合`, "bad");
@@ -724,6 +734,17 @@ async function landOn(p, c){
     log(`<b>${p.name}</b> 缴税 <b>-${fmt(t)}</b> 万`, "bad");
     renderHUD(); return;
   }
+}
+
+/* 风景区停留回合：1 回合 50%、2 回合 25%……6 回合 1% */
+function rollScenicStay(){
+  let r = Math.random() * 100;
+  const odds = CFG.scenicOdds;
+  for (let i = 0; i < odds.length; i++){
+    if (r < odds[i]) return i + 1;
+    r -= odds[i];
+  }
+  return 1;
 }
 
 function sendToJail(p, reason){
@@ -795,6 +816,57 @@ function doRepay(p, amt){
   p.cash -= amt; p.debt -= amt;
   log(`<b>${p.name}</b> 还款 <b>-${fmt(amt)}</b> 万`, "");
   renderHUD();
+}
+
+/* 物业费：每月按地价 0.15%，空地减半 */
+function mgmtFee(p){
+  return owned(p).reduce((s, c) =>
+    s + Math.round(value(c) * (c.lv === 0 ? CFG.mgmtVacantRate : CFG.mgmtRate)), 0);
+}
+
+/* 强制拍卖：其他玩家按 85 折接手；无人接手则 7 折抵押给银行，所得先抵债 */
+function liquidate(p){
+  const plots = owned(p).slice().sort((a, b) => value(b) - value(a));
+  if (!plots.length) return 0;
+  let raised = 0;
+  plots.forEach(c => {
+    const price = Math.round(value(c) * 0.85);
+    const buyers = state.players
+      .filter(x => !x.bankrupt && x !== p && x.cash - price >= aiNeed(x) * 0.5)
+      .sort((a, b) => b.cash - a.cash);
+    const taker = buyers[0];
+    if (taker && Math.random() < 0.7){
+      taker.cash -= price;
+      c.owner = taker; c.boughtAt = state.absMonth;
+      raised += price;
+      log(`强制拍卖：<b>${taker.name}</b> 以 ${fmt(price)} 万接手 ${c.name}`, "");
+    } else {
+      const mv = Math.round(value(c) * 0.7);
+      c.owner = null; c.lv = 0; c.broken = false; c.boost = 0;
+      raised += mv;
+      log(`强制拍卖：${c.name} 无人接手，按 7 折 ${fmt(mv)} 万抵押给银行`, "");
+    }
+  });
+  p.cash += raised;
+  const pay = Math.min(Math.max(0, p.cash), p.debt);
+  p.cash -= pay; p.debt -= pay;
+  return raised;
+}
+
+function startLiquidation(p){
+  if (p.liquidating) return;
+  p.liquidating = true;
+  p.liqDeadline = state.absMonth + CFG.liqMonths;
+  const n = owned(p).length;
+  log(`<b>${p.name}</b> 资不抵债，启动破产清算：名下 ${n} 宗地被强制拍卖`, "bad");
+  const raised = liquidate(p);
+  if (p.debt <= 0){
+    p.liquidating = false;
+    log(`<b>${p.name}</b> 拍卖回笼 ${fmt(raised)} 万，债务已清偿，退出清算`, "sys");
+  } else {
+    log(`<b>${p.name}</b> 仍有 ${fmt(p.debt)} 万债务，${CFG.liqMonths} 个月内未还清将出局`, "bad");
+  }
+  renderCells(); renderHUD();
 }
 
 /* 现金为负：先卖地，再考虑免死，最后出局 */
@@ -876,6 +948,8 @@ function aiBuy(p, c){
 
   const adj = adjCount(p, c);
   const need = aiNeed(p);
+  // 名下没有地块：只要能负担就买——无地等于没有收入，拖下去必死
+  if (!owned(p).length && p.cash - price - fee >= need * 0.3) return true;
   // 若场上还有「贴着我的地」的空地，留钱等它，别把钱花在无关地块上
   const hasAdjTarget = d.vision >= 1 && allCells().some(x =>
     x.t === "plot" && !x.owner && x.unlocked && !x.broken && adjCount(p, x) > 0);
@@ -936,14 +1010,16 @@ function aiPreTurn(p){
 
   // 2) 备弹：新经济下「现金主要来自对手」，所以要有钱在落地时出手。
   //    月租 0.8%—2.0% 高于贷款月息 0.48%，借钱买地是正利差，值得加杠杆。
-  // 激进角色备弹更厚：借钱不是为了救急，是为了下一次落地能直接拿下
-  const ammo = need + marketPrice() * (risk.lev >= 0.35 ? 2.2 : 0.8);
+  // 借钱只为「能立刻拿下一块地」，不为囤现金——否则白付利息，净资产会被拖成负数
+  const mkt = marketPrice();
+  const ammo = need + mkt * (risk.lev >= 0.35 ? 1.6 : 0.5);
   const lev = p.debt / Math.max(1, netWorth(p));
   // 角色风险偏好 × 难度系数：老狐狸比跟风型更敢借
   const maxLev = Math.min(0.6, risk.lev * (0.75 + 0.5 * d.lever));
-  if (p.cash < ammo && lev < maxLev && loanCap(p) >= 100){
+  if (mkt > 0 && p.cash < ammo && lev < maxLev && loanCap(p) >= 100){
     const want = Math.min(ammo - p.cash, loanCap(p), CFG.loanStep);
-    if (want >= 80) doLoan(p, Math.round(want));
+    // 借完的现金至少要够买一块市场价的地，否则不借
+    if (want >= 80 && p.cash + want >= mkt) doLoan(p, Math.round(want));
   }
 
   // 3) 现金远超备弹且有利息负担：先还一部分，别为闲置的钱付息
@@ -992,6 +1068,11 @@ async function endMonth(){
     if (p.bankrupt) return;
     const r = owned(p).reduce((s, c) => s + rentOf(c), 0);
     if (r > 0){ p.cash += r; }
+    const fee = mgmtFee(p);
+    if (fee > 0) p.cash -= fee;
+    if (p.human && (r > 0 || fee > 0)){
+      log(`　本月租金 <b>+${fmt(r)}</b> 万，物业费 <b>-${fmt(fee)}</b> 万`, "");
+    }
     owned(p).forEach(c => {
       if (c.boost > 0) c.boost--;
       else if (c.boost < 0) c.boost++;
@@ -1039,6 +1120,22 @@ async function endMonth(){
   // 地块解锁
   curCells().forEach(c => {
     if (c.t === "plot" && !c.unlocked && c.unlock === chapterMonth()) c.unlocked = true;
+  });
+
+  // 资不抵债 → 强制拍卖；清算期内未还清则出局
+  state.players.forEach(p => {
+    if (p.bankrupt) return;
+    if (p.liquidating){
+      if (p.debt <= 0){
+        p.liquidating = false;
+        log(`<b>${p.name}</b> 债务已清偿，解除清算`, "sys");
+      } else if (state.absMonth >= p.liqDeadline){
+        p.bankrupt = true;
+        log(`<b>${p.name}</b> 清算期满仍有 ${fmt(p.debt)} 万债务未还，宣告破产出局`, "bad");
+      }
+    } else if (netWorth(p) < 0){
+      startLiquidation(p);
+    }
   });
 
   // 被关押或度假的玩家不掷骰，负现金不会经过 settle()，这里补一次
@@ -1097,6 +1194,7 @@ function nextChapter(){
 
   // 资产继承：净资产 × 40%，保留 1 宗最贵地块
   state.players.forEach(p => {
+    if (p.bankrupt) return;          // 已出局者不复活：复活后无地无收入，下章必死
     const plots = owned(p).sort((a, b) => value(b) - value(a));
     const keep = plots[0];
     const cash = Math.max(0, Math.round(netWorth(p) * CFG.inheritRate));
@@ -1105,6 +1203,7 @@ function nextChapter(){
     p.cash = cash; p.debt = 0; p.pos = 0; p.bankrupt = false;
     p.stock = 0; p.bridge = 0; p.revalue = 1;
     p.inJail = false; p.jailFail = 0; p.scenicTurns = 0; p.scenicName = "";
+    p.liquidating = false; p.liqDeadline = 0;
   });
 
   state.chapter = next;
@@ -1136,7 +1235,8 @@ function serialize(){
     players: state.players.map(p => ({
       id:p.id, cash:p.cash, debt:p.debt, pos:p.pos, bankrupt:p.bankrupt,
       stock:p.stock || 0, savedOnce:!!p.savedOnce, bridge:p.bridge || 0, freePass:!!p.freePass,
-      inJail:!!p.inJail, jailFail:p.jailFail || 0, scenicTurns:p.scenicTurns || 0, scenicName:p.scenicName || ""
+      inJail:!!p.inJail, jailFail:p.jailFail || 0, scenicTurns:p.scenicTurns || 0, scenicName:p.scenicName || "",
+      liquidating:!!p.liquidating, liqDeadline:p.liqDeadline || 0
     }))
   };
 }
@@ -1170,6 +1270,7 @@ function restore(d){
     p.cash = 0; p.debt = 0; p.pos = 0; p.bankrupt = false;
     p.stock = 0; p.savedOnce = false; p.bridge = 0; p.freePass = false;
     p.inJail = false; p.jailFail = 0; p.scenicTurns = 0; p.scenicName = "";
+    p.liquidating = false; p.liqDeadline = 0;
   });
   d.players.forEach(s => {
     const p = state.players[s.id];
@@ -1177,6 +1278,7 @@ function restore(d){
     p.stock = s.stock; p.savedOnce = s.savedOnce; p.bridge = s.bridge; p.freePass = s.freePass;
     p.inJail = !!s.inJail; p.jailFail = s.jailFail || 0;
     p.scenicTurns = s.scenicTurns || 0; p.scenicName = s.scenicName || "";
+    p.liquidating = !!s.liquidating; p.liqDeadline = s.liqDeadline || 0;
   });
   allCells().forEach(c => { if (c.t === "plot"){ c.owner = null; c.lv = 0; } });
   d.cells.forEach(s => {
@@ -1264,7 +1366,8 @@ function newGame(charId, diff, chapter){
     human: SIM ? false : i === 0, cash:Math.round(c.cash * eraAtStart), debt:0, pos:0, stock:0,
     bankrupt:false, savedOnce:false, skipBuy:false, freePass:false,
     bridge:0, revalue:1, skipBao:false, risk:0,
-    inJail:false, jailFail:0, scenicTurns:0, scenicName:""
+    inJail:false, jailFail:0, scenicTurns:0, scenicName:"",
+    liquidating:false, liqDeadline:0
   }));
 
   // 从中途章节开局：把此前发生过的事件补演一遍，保证热度、政策、等级上限与历史一致
