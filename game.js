@@ -11,7 +11,8 @@ const rnd = n => Math.floor(Math.random() * n);
 
 const RENT_RATE = [0, 0.008, 0.011, 0.014, 0.017, 0.020];
 const stockLot = () => Math.round(state.stockPrice * 0.1);   // 每手 ≈ 100 万
-const TOLL_RATE = [0, 0.040, 0.055, 0.070, 0.085, 0.100];
+const TOLL_RATE = [0, 0.10, 0.12, 0.14, 0.16, 0.18];   // V1.1：Lv1 由 4% 上调至 10%
+const PIECE = ["♚", "♛", "♜", "♞"];                 // 王 / 后 / 车 / 马
 const UP_GATE  = [{}, {}, {m:1, h:30}, {m:2, h:45}, {m:3, h:60}, {m:6, h:75}];
 
 const CHAPTERS = [
@@ -46,10 +47,15 @@ function buildRings(){
         const p = ring.plots[+token.slice(1)];
         return {
           t:"plot", ring:ri, idx, name:p.n, region:p.r,
-          price: Math.round(p.b / 20), base:p.b, maxLv:p.mx,
+          price: Math.round(p.b / 40), base:p.b, maxLv:p.mx,
           unlock:p.u, lv:0, owner:null, unlocked:p.u === 0,
           boughtAt:-99, broken:false, boost:0, discount:1
         };
+      }
+      if (token === "jail") return { t:"jail", name:"监狱", fullName:"监狱", ring:ri, idx };
+      if (token === "scenic"){
+        const sc = SCENIC[ri] || SCENIC[0];
+        return { t:"scenic", name:sc.short, fullName:sc.full, ring:ri, idx };
       }
       const label = { chance:"机会", fate:"命运", bank:"银行", tax:"税务", stock:"证券" }[token];
       return { t:token, name:label, ring:ri, idx };
@@ -84,7 +90,41 @@ function rentOf(c){
   if (c.boost < 0) r = 0;
   return Math.round(r);
 }
-const tollOf = c => Math.round(value(c) * TOLL_RATE[c.lv] * (c.boost > 0 ? 1.5 : 1));
+/* 连片加成：环上相邻（序号 ±1）同主则 ×2；跨起点不算相邻；不叠乘 */
+function neighbors(c){
+  const cells = state.rings[c.ring].cells, n = cells.length;
+  return [cells[(c.idx - 1 + n) % n], cells[(c.idx + 1) % n]]
+    .filter(x => x && x.idx !== 0);          // idx 0 是起点，隔断首尾
+}
+function adjacentBonus(c){
+  if (!c.owner) return 1;
+  return neighbors(c).some(x => x.t === "plot" && x.owner === c.owner) ? 2 : 1;
+}
+function adjCount(p, c){
+  return neighbors(c).filter(x => x.t === "plot" && x.owner === p).length;
+}
+/* 夹在两个同主地块之间的那一格：买下它就拆掉了对手的连片 */
+function sandwichedOwner(c){
+  const nb = neighbors(c).filter(x => x.t === "plot" && x.owner);
+  if (nb.length < 2) return null;
+  return nb[0].owner === nb[1].owner ? nb[0].owner : null;
+}
+function tollParts(c){
+  const raw = value(c) * TOLL_RATE[c.lv];
+  const adj = adjacentBonus(c);
+  const boost = c.boost > 0 ? 1.5 : 1;
+  // 只在最后取整一次，避免「先取整再乘 2」带来的 1 万误差
+  return { base: Math.round(raw), adj, boost, total: Math.round(raw * adj * boost) };
+}
+const tollOf = c => (c.lv > 0 && !c.broken ? tollParts(c).total : 0);
+
+/* 实际支付：单次不超过支付方净资产的 30%（V1.1） */
+function tollFor(payer, c){
+  const raw = tollOf(c);
+  const cap = Math.round(Math.max(0, netWorth(payer)) * CFG.tollCap);
+  if (raw > cap) return { pay: cap, cut: raw - cap, raw };
+  return { pay: raw, cut: 0, raw };
+}
 const upCost = c => Math.round(value(c) * CFG.upRate);
 
 function netWorth(p){
@@ -232,6 +272,7 @@ function renderCells(){
   cells.forEach(cell => {
     const el = document.querySelector(`.cell[data-i="${cell.idx}"]`);
     if (!el) return;
+    if (cell.t === "jail" || cell.t === "scenic"){ el.classList.add(cell.t); return; }
     if (cell.t !== "plot") return;
     el.classList.toggle("locked", !cell.unlocked);
     el.classList.toggle("broken", !!cell.broken);
@@ -255,33 +296,63 @@ function renderTokens(){
   const n = curCells().length, R = 43;
   const by = {};
   state.players.forEach(p => { if (!p.bankrupt) (by[p.pos] = by[p.pos] || []).push(p); });
+  const cur = state.players[state.turnIdx];
   Object.keys(by).forEach(idx => {
     const a = (-90 + idx * 360 / n) * Math.PI / 180;
     const bx = 50 + R * Math.cos(a), byy = 50 + R * Math.sin(a);
-    const list = by[idx];
+    const list = by[idx], cnt = list.length;
     list.forEach((p, k) => {
       const t = document.createElement("div");
-      t.className = "token";
-      t.style.background = p.color;
-      t.textContent = p.name[0];
-      const dx = list.length > 1 ? (k - (list.length - 1) / 2) * 13 : 0;
-      const dy = list.length > 1 ? 16 : 0;
+      t.className = "token" + (p === cur && !state.over ? " active" : "");
+      t.style.color = p.color;
+      t.textContent = PIECE[p.id] || "♟";
+      // 同格多人时缩小并横向排开，避免叠在一起看不清
+      const size = cnt === 1 ? 27 : cnt === 2 ? 24 : 21;
+      t.style.fontSize = size + "px";
+      const dx = cnt > 1 ? (k - (cnt - 1) / 2) * (size * 0.78) : 0;
       t.style.left = `calc(${bx}% + ${dx}px)`;
-      t.style.top = `calc(${byy}% + ${dy}px)`;
+      t.style.top = `calc(${byy}% + 11px)`;
       wrap.appendChild(t);
     });
   });
 }
 
+let logPinned = true;
+function trimLog(){
+  const box = $("#log");
+  while (box.children.length > 300) box.removeChild(box.firstChild);
+}
+function scrollLog(force){
+  const box = $("#log");
+  if (force || logPinned) box.scrollTop = box.scrollHeight;
+}
 function log(msg, type=""){
   const box = $("#log");
   const p = document.createElement("p");
   if (type) p.className = type;
   p.innerHTML = msg;
   box.appendChild(p);
-  while (box.children.length > 200) box.removeChild(box.firstChild);
-  box.scrollTop = box.scrollHeight;
+  trimLog();
+  scrollLog();
 }
+/* 每名玩家开始行动时打一条分隔行；月初第一条带月份 */
+function logSep(p, withMonth){
+  const box = $("#log");
+  const d = document.createElement("p");
+  d.className = "sep";
+  d.textContent = withMonth ? `${monthLabel(state.absMonth)} · ${p.name}` : p.name;
+  box.appendChild(d);
+  trimLog();
+  scrollLog();
+}
+$("#log").addEventListener("scroll", () => {
+  const box = $("#log");
+  logPinned = box.scrollHeight - box.scrollTop - box.clientHeight < 20;
+  $("#logJump").classList.toggle("show", !logPinned);
+});
+$("#logJump").addEventListener("click", () => {
+  logPinned = true; scrollLog(true); $("#logJump").classList.remove("show");
+});
 
 let toastTimer;
 function toast(msg){
@@ -313,7 +384,7 @@ function closeSheet(){ $("#modal").classList.add("hidden"); }
 function showCell(c){
   if (c.t !== "plot"){
     let body = "";
-    if (c.t === "start") body = `<p class="sub">每次经过领月供 <b>120 万</b>。</p>`;
+    if (c.t === "start") body = `<p class="sub">每次经过领 <b>月供 1 万 + 当前现金 3%</b>。系统不再按人头发钱，收入主要来自对手踩你的地。</p>`;
     else if (c.t === "chance" || c.t === "fate"){
       const deck = c.t === "chance" ? CHANCE : FATE;
       const rows = deck.slice(0, 8).map(k => `<div class="ev"><span class="ev-n">${k.t}</span><span class="ev-d">${k.d}</span></div>`).join("");
@@ -323,6 +394,18 @@ function showCell(c){
       body = `<p class="sub">可借款、还款。负债每月计息，计入净资产。</p>
         <div class="kv"><span>当前月息</span><b>${(loanRate() * 100).toFixed(2)}%</b></div>
         <div class="kv"><span>你的可借额度</span><b>${fmt(loanCap(p))} 万</b></div>`;
+    } else if (c.t === "jail"){
+      body = `<p class="sub">踩进这里，或抽到「代持被查」「违规套现」「虚假宣传被立案」，都会进来。</p>
+        <div class="kv"><span>出狱条件</span><b>掷出偶数点数</b></div>
+        <div class="kv"><span>每回合概率</span><b>50%</b></div>
+        <div class="kv"><span>保底</span><b>3 次未中，第 4 回合强制释放</b></div>
+        <p class="sub" style="margin-top:8px">关押期间不能买卖，但租金照收、利息照付。</p>`;
+    } else if (c.t === "scenic"){
+      body = `<p class="sub">${c.fullName || c.name}。踩中后掷 1D6，点数就是停留回合数。</p>
+        <div class="kv"><span>停留</span><b>1—6 回合</b></div>
+        <div class="kv"><span>期间</span><b>不能移动、不能买卖</b></div>
+        <div class="kv"><span>现金流</span><b>租金照收，利息照付</b></div>
+        <p class="sub" style="margin-top:8px">阿莲的被动让停留回合数减半。这是全作唯一花钱也解决不了的惩罚。</p>`;
     } else if (c.t === "tax"){
       body = `<p class="sub">每次经过按净资产 <b>1.2%</b> 缴税。</p>`;
     } else if (c.t === "stock"){
@@ -349,8 +432,9 @@ function showCell(c){
     <div class="kv"><span>当前地价</span><b>${fmt(value(c))} 万</b></div>
     <div class="kv"><span>所有者</span><b>${c.owner ? c.owner.name : "无主"}</b></div>
     <div class="kv"><span>等级</span><b>${c.lv ? "Lv" + c.lv : "空地"}</b></div>
-    <div class="kv"><span>过路费</span><b>${c.lv ? fmt(tollOf(c)) + " 万" : "—"}</b></div>
+    <div class="kv"><span>过路费${adjacentBonus(c) > 1 ? "（连片 ×2）" : ""}</span><b>${c.lv ? fmt(tollOf(c)) + " 万" : "—"}</b></div>
     <div class="kv"><span>月租金</span><b>${c.lv ? fmt(rentOf(c)) + " 万" : "—"}</b></div>
+    ${c.lv ? `<div class="kv"><span>单次上限</span><b>对手净资产的 ${CFG.tollCap * 100}%</b></div>` : ""}
     <div class="btns">
       <button class="btn-sub" onclick="closeSheet()">关闭</button>
       ${mine ? `<button class="btn-red" onclick="__sell(${c.ring},${c.idx})">卖出 ${fmt(sellPrice)} 万</button>` : ""}
@@ -368,12 +452,13 @@ function askBuy(p, c){
     const needLottery = hasPolicy("lottery") && state.heat[c.region] >= 60 && !p.freePass;
     const total = price + fee;
     const ok = p.cash >= total;
+    const adjAfter = neighbors(c).some(x => x.t === "plot" && x.owner === p) ? 2 : 1;
     openSheet(`
       <h3>${c.name} <span class="badge" style="background:${REGIONS[c.region].color};color:#fff">${c.region}</span></h3>
       <p class="sub">无主地块 · 热度 ${state.heat[c.region]}${needLottery ? " · 需摇号" : ""}</p>
       <div class="kv"><span>地价</span><b>${fmt(price)} 万</b></div>
       <div class="kv"><span>交易税费</span><b>${fmt(fee)} 万</b></div>
-      <div class="kv"><span>Lv1 过路费</span><b>${fmt(Math.round(price * TOLL_RATE[1]))} 万</b></div>
+      <div class="kv"><span>Lv1 过路费${adjAfter > 1 ? "（连片 ×2）" : ""}</span><b>${fmt(Math.round(price * TOLL_RATE[1] * adjAfter))} 万</b></div>
       <div class="kv"><span>Lv1 月租金</span><b>${fmt(Math.round(price * RENT_RATE[1]))} 万</b></div>
       <div class="warn">${ok ? "" : "现金不足"}</div>
       <div class="btns">
@@ -400,7 +485,7 @@ function askUpgrade(p, c){
       <p class="sub">当前 Lv${c.lv} / 上限 Lv${c.maxLv}</p>
       <div class="kv"><span>升级费用</span><b>${fmt(cost)} 万</b></div>
       <div class="kv"><span>升级后月租金</span><b>${fmt(Math.round(value(c) * RENT_RATE[c.lv + 1]))} 万</b></div>
-      <div class="kv"><span>升级后过路费</span><b>${fmt(Math.round(value(c) * TOLL_RATE[c.lv + 1]))} 万</b></div>
+      <div class="kv"><span>升级后过路费${adjacentBonus(c) > 1 ? "（连片 ×2）" : ""}</span><b>${fmt(Math.round(value(c) * TOLL_RATE[c.lv + 1] * adjacentBonus(c)))} 万</b></div>
       <div class="warn">${ok ? "" : why}</div>
       <div class="btns">
         <button class="btn-sub" onclick="__up(false)">算了</button>
@@ -452,13 +537,46 @@ async function roll(){
   const p = state.players[state.turnIdx];
   state.busy = true; updateButton();
 
+  // 风景区：本回合不动，停留回合数递减
+  if (p.scenicTurns > 0){
+    p.scenicTurns--;
+    log(`<b>${p.name}</b> 还在${p.scenicName || "景区"}，本回合不动（剩 ${p.scenicTurns} 回合）`, "");
+    toast(`${p.name} 度假中`);
+    await sleep(360);
+    state.busy = false; nextTurn(); return;
+  }
+
   if (p.charId === "bao" && !p.skipBao){ boostByBao(p); p.skipBao = true; }
 
   const d1 = 1 + rnd(6), d2 = 1 + rnd(6);
-  toast(`${p.name} 掷出 ${d1} + ${d2} = ${d1 + d2}`);
+  const sum = d1 + d2;
+
+  // 监狱：掷出偶数出狱；连续 3 次未掷出则第 4 回合强制出狱
+  if (p.inJail){
+    const forced = p.jailFail >= CFG.jailFailMax;
+    const even = sum % 2 === 0;
+    if (forced || even){
+      const why = forced ? "关押期满，依法释放" : `掷出 ${d1}+${d2}=${sum}（偶数），获释`;
+      p.inJail = false; p.jailFail = 0;
+      log(`<b>${p.name}</b> ${why}，前进 ${sum} 格`, "good");
+      toast(forced ? "关押期满" : "掷出偶数，出狱");
+      await sleep(380);
+      await move(p, sum);
+      await landOn(p, curCells()[p.pos]);
+      await settle(p);
+    } else {
+      p.jailFail++;
+      log(`<b>${p.name}</b> 掷出 ${d1}+${d2}=${sum}（奇数），继续关押（${p.jailFail}/${CFG.jailFailMax}）`, "bad");
+      toast("奇数，继续关押");
+      await sleep(420);
+    }
+    state.busy = false; nextTurn(); return;
+  }
+
+  toast(`${p.name} 掷出 ${d1} + ${d2} = ${sum}`);
   await sleep(380);
 
-  await move(p, d1 + d2);
+  await move(p, sum);
   await landOn(p, curCells()[p.pos]);
   await settle(p);
 
@@ -472,8 +590,11 @@ async function move(p, steps){
     const prev = p.pos;
     p.pos = (p.pos + 1) % cells.length;
     if (p.pos === 0 && prev !== 0){
-      p.cash += CFG.passGo;
-      log(`<b>${p.name}</b> 经过起点，领月供 <b>+${CFG.passGo}</b> 万`, "good");
+      // V1.1：月供 1 万 + 当前现金 3%（现金为负时不发）
+      const extra = Math.round(Math.max(0, p.cash) * CFG.passGoRate);
+      const bonus = CFG.passGo + extra;
+      p.cash += bonus;
+      log(`<b>${p.name}</b> 经过起点，月供 +${CFG.passGo} 万，另按现金 ${CFG.passGoRate * 100}% 得 +${fmt(extra)} 万，共 <b>+${fmt(bonus)}</b> 万`, "good");
     }
     renderTokens();
     await sleep(130);
@@ -520,9 +641,11 @@ async function landOn(p, c){
         }
       }
     } else {
-      const fee = tollOf(c);
-      p.cash -= fee; c.owner.cash += fee;
-      log(`<b>${p.name}</b> 踩到 ${c.owner.name} 的 ${c.name}，付过路费 <b>-${fmt(fee)}</b> 万`, "bad");
+      const t = tollFor(p, c);
+      p.cash -= t.pay; c.owner.cash += t.pay;
+      const chain = t.pay > 0 && adjacentBonus(c) > 1 ? "（连片 ×2）" : "";
+      log(`<b>${p.name}</b> 踩到 ${c.owner.name} 的 ${c.name}${chain}，付过路费 <b>-${fmt(t.pay)}</b> 万`, "bad");
+      if (t.cut > 0) log(`　单次上限为净资产 ${CFG.tollCap * 100}%，经调解减免 ${fmt(t.cut)} 万`, "sys");
     }
     renderCells(); renderHUD();
     return;
@@ -537,7 +660,7 @@ async function landOn(p, c){
       const act = await askBank(p);
       if (act === "loan") doLoan(p, Math.min(CFG.loanStep, loanCap(p)));
       if (act === "repay") doRepay(p, Math.min(p.debt, p.cash));
-    } else if (p.cash < 160 && loanCap(p) >= 100 && Math.random() < DIFF[state.diff].lever){
+    } else if (p.cash < aiNeed(p) && loanCap(p) >= 100 && Math.random() < DIFF[state.diff].lever){
       doLoan(p, Math.min(CFG.loanStep, loanCap(p)));
     }
     renderHUD(); return;
@@ -548,11 +671,24 @@ async function landOn(p, c){
       const act = await askStock(p);
       if (act === "buy"){ p.cash -= stockLot(); p.stock = (p.stock || 0) + 1; log(`<b>${p.name}</b> 买入 1 手指数`, ""); }
       if (act === "sell"){ p.cash += stockLot(); p.stock--; log(`<b>${p.name}</b> 卖出 1 手指数`, ""); }
-    } else if (p.cash > 600 && Math.random() < 0.4){
+    } else if (p.cash > aiNeed(p) * 2.2 && Math.random() < 0.4){
       p.cash -= stockLot(); p.stock = (p.stock || 0) + 1;
       log(`<b>${p.name}</b> 买入 1 手指数`, "");
     }
     renderHUD(); return;
+  }
+
+  if (c.t === "jail"){ sendToJail(p, "踩进监狱"); return; }
+
+  if (c.t === "scenic"){
+    let n = 1 + rnd(6);
+    if (p.charId === "lian") n = Math.ceil(n / 2);   // 阿莲：景区停留减半
+    p.scenicTurns = n; p.scenicName = c.fullName || c.name;
+    log(`<b>${p.name}</b> 去了${c.fullName || c.name}，掷出 ${n}，要停留 ${n} 回合`, "bad");
+    toast(`${p.name} 在${c.name}停留 ${n} 回合`);
+    renderHUD();
+    await sleep(420);
+    return;
   }
 
   if (c.t === "tax"){
@@ -561,6 +697,14 @@ async function landOn(p, c){
     log(`<b>${p.name}</b> 缴税 <b>-${fmt(t)}</b> 万`, "bad");
     renderHUD(); return;
   }
+}
+
+function sendToJail(p, reason){
+  const j = curCells().findIndex(x => x.t === "jail");
+  if (j >= 0) p.pos = j;
+  p.inJail = true; p.jailFail = 0; p.scenicTurns = 0;
+  renderTokens(); renderHUD();
+  log(`<b>${p.name}</b> ${reason || "被带走调查"}，需掷出偶数才能继续前进`, "bad");
 }
 
 async function lotteryCheck(p, c){
@@ -665,24 +809,51 @@ function auction(plots, exclude){
   });
 }
 
-/* ---------------- AI ---------------- */
+/* ---------------- AI ----------------
+   V1.1 经济下的三条原则：
+   1. 现金垫按「平均一次过路费」算，不再按「每圈白拿 150 万」算
+   2. 连片让过路费翻倍，所以相邻自有地是最高优先级的购买理由
+   3. 夹在对手两格中间的地，买下就是拆掉对手的 ×2
+*/
+function avgToll(p){
+  const plots = allCells().filter(c => c.t === "plot" && c.owner && c.owner !== p && c.lv > 0 && !c.broken);
+  if (!plots.length) return 0;
+  const avg = plots.reduce((s, c) => s + tollOf(c), 0) / plots.length;
+  return Math.min(avg, Math.max(0, netWorth(p)) * CFG.tollCap);
+}
+/* 目标现金垫：够付一次平均过路费 + 两个月利息 */
+function aiNeed(p){
+  const d = DIFF[state.diff];
+  const interest = Math.round(p.debt * loanRate());
+  return Math.round(avgToll(p) * d.reserve + interest * 2 + 60);
+}
+
 function aiBuy(p, c){
   const d = DIFF[state.diff];
   const price = value(c);
-  const fee = Math.round(price * 0.03);
-  const monthly = owned(p).reduce((s, x) => s + rentOf(x), 0);
-  const burn = owned(p).reduce((s, x) => s + Math.round(value(x) * 0.002), 0) + 40;
-  const reserve = burn * 10 * d.reserve + 120;
-  if (p.cash - price - fee < reserve) return false;
+  const fee = Math.round(price * (p.charId === "wang" ? 0.015 : 0.03));
+  if (p.cash - price - fee < 0) return false;
   if (hasPolicy("limitBuy") && owned(p).length >= 2) return false;
 
-  let bias = 1;
-  if (p.charId === "lian" && ["西湖边","之江","滨江"].includes(c.region)) bias = 1.25;
-  if (p.charId === "ma" && c.region === "未来科技城") bias = 1.3;
-  if (p.trait === "激进" && ["城北","城东","临平"].includes(c.region)) bias = 1.2;
+  const adj = adjCount(p, c);
+  const need = aiNeed(p);
+  // 若场上还有「贴着我的地」的空地，留钱等它，别把钱花在无关地块上
+  const hasAdjTarget = d.vision >= 1 && allCells().some(x =>
+    x.t === "plot" && !x.owner && x.unlocked && !x.broken && adjCount(p, x) > 0);
+  const reserve = need * (adj ? 0.5 : (hasAdjTarget ? 1.8 : 1));
+  if (p.cash - price - fee < reserve) return false;
 
-  const score = (state.heat[c.region] / 60) * bias * (1 - d.noise + Math.random() * d.noise * 2);
-  return score > 0.9;
+  // 跟风型：只看热度，冷区不碰
+  if (d.vision === 0 && state.heat[c.region] < 50 && Math.random() < 0.6) return false;
+
+  // 算账型以上：连片必买——过路费直接翻倍，这是新经济里最值钱的一格
+  if (adj) return true;
+  // 夹在对手两格中间：买下就拆掉对方的 ×2
+  const victim = sandwichedOwner(c);
+  if (victim && victim !== p && d.vision >= 1) return true;
+
+  // 其余情况：热度够、或者便宜到能顺手拿下
+  return state.heat[c.region] >= 48 || price < p.cash * 0.55 || Math.random() < 0.25;
 }
 
 function aiUpgrade(p, c){
@@ -691,20 +862,50 @@ function aiUpgrade(p, c){
   const g = UP_GATE[c.lv + 1] || {};
   if (state.absMonth - c.boughtAt < (g.m || 0)) return false;
   if (state.heat[c.region] < (g.h || 0)) return false;
-  const reserve = 260 * d.reserve;
-  if (p.cash - cost < reserve) return false;
-  return Math.random() < 0.5 + 0.4 * d.lever;
+  const adj = adjCount(p, c);
+  if (p.cash - cost < aiNeed(p) * (adj ? 0.6 : 1)) return false;
+  let prob = 0.45 + 0.35 * d.lever;
+  if (d.vision >= 1 && adj) prob += 0.25;   // 连片地块升级，收益是双份
+  return Math.random() < prob;
+}
+
+/* 市场上在售地块的中位价，用来估算「落地时买得起」需要多少现金 */
+function marketPrice(){
+  const list = allCells().filter(c => c.t === "plot" && c.unlocked && !c.owner && !c.broken);
+  if (!list.length) return 0;
+  const arr = list.map(value).sort((a, b) => a - b);
+  return arr[Math.floor(arr.length * 0.35)];   // 取偏低价位，AI 不必总盯着最贵的
 }
 
 function aiPreTurn(p){
   const d = DIFF[state.diff];
-  const burn = owned(p).reduce((s, x) => s + Math.round(value(x) * 0.002), 0) + 40;
-  if (p.cash < burn * 5 * d.reserve && loanCap(p) >= 100 && Math.random() < d.lever){
-    doLoan(p, Math.min(CFG.loanStep, loanCap(p)));
+  const need = aiNeed(p);
+  const interest = Math.round(p.debt * loanRate());
+
+  // 1) 保命：现金跌破安全垫 45% 就卖地，先卖「不连片、单价低」的
+  if (p.cash < need * 0.45){
+    const list = owned(p)
+      .filter(c => !(hasPolicy("noSell") && state.absMonth - c.boughtAt < 3))
+      .sort((a, b) => (value(a) * (adjCount(p, a) ? 2 : 1)) - (value(b) * (adjCount(p, b) ? 2 : 1)));
+    for (const c of list){
+      if (p.cash >= need * 0.7) break;
+      sellLand(p, c);
+    }
   }
-  if (p.cash < burn * 3){
-    const worst = owned(p).sort((a, b) => value(a) - value(b))[0];
-    if (worst && Math.random() < 0.7) sellLand(p, worst);
+
+  // 2) 备弹：新经济下「现金主要来自对手」，所以要有钱在落地时出手。
+  //    月租 0.8%—2.0% 高于贷款月息 0.48%，借钱买地是正利差，值得加杠杆。
+  const ammo = need + marketPrice() * 0.8;
+  const lev = p.debt / Math.max(1, netWorth(p));
+  const maxLev = { easy:0.12, normal:0.28, hard:0.45 }[state.diff] || 0.28;
+  if (p.cash < ammo && lev < maxLev && loanCap(p) >= 100){
+    const want = Math.min(ammo - p.cash, loanCap(p), CFG.loanStep);
+    if (want >= 80) doLoan(p, Math.round(want));
+  }
+
+  // 3) 现金远超备弹且有利息负担：先还一部分，别为闲置的钱付息
+  if (p.debt > 0 && interest > 0 && p.cash > ammo * 2 && Math.random() < 0.6){
+    doRepay(p, Math.min(p.debt, Math.round((p.cash - ammo * 1.4) * 0.6)));
   }
 }
 
@@ -727,10 +928,12 @@ function nextTurn(){
 
   const alive = state.players.filter(p => !p.bankrupt).length;
   state.turnCount++;
-  if (state.turnCount >= alive){ state.turnCount = 0; endMonth(); }
+  let newMonth = false;
+  if (state.turnCount >= alive){ state.turnCount = 0; newMonth = true; endMonth(); }
 
   renderHUD(); updateButton();
   const p = state.players[state.turnIdx];
+  if (!state.over) logSep(p, newMonth);
   if (!p.human && !state.over){
     aiPreTurn(p);
     setTimeout(roll, 380);
@@ -795,6 +998,9 @@ async function endMonth(){
     if (c.t === "plot" && !c.unlocked && c.unlock === chapterMonth()) c.unlocked = true;
   });
 
+  // 被关押或度假的玩家不掷骰，负现金不会经过 settle()，这里补一次
+  state.players.forEach(p => { if (!p.bankrupt && p.cash < 0) settle(p); });
+
   renderCells(); renderHUD();
 
   if (chapterMonth() >= curCh().months) endChapter(false);
@@ -855,6 +1061,7 @@ function nextChapter(){
     if (keep){ keep.owner = p; keep.lv = Math.max(1, keep.lv); keep.boughtAt = state.absMonth; }
     p.cash = cash; p.debt = 0; p.pos = 0; p.bankrupt = false;
     p.stock = 0; p.bridge = 0; p.revalue = 1;
+    p.inJail = false; p.jailFail = 0; p.scenicTurns = 0; p.scenicName = "";
   });
 
   state.chapter = next;
@@ -885,7 +1092,8 @@ function serialize(){
     })),
     players: state.players.map(p => ({
       id:p.id, cash:p.cash, debt:p.debt, pos:p.pos, bankrupt:p.bankrupt,
-      stock:p.stock || 0, savedOnce:!!p.savedOnce, bridge:p.bridge || 0, freePass:!!p.freePass
+      stock:p.stock || 0, savedOnce:!!p.savedOnce, bridge:p.bridge || 0, freePass:!!p.freePass,
+      inJail:!!p.inJail, jailFail:p.jailFail || 0, scenicTurns:p.scenicTurns || 0, scenicName:p.scenicName || ""
     }))
   };
 }
@@ -918,11 +1126,14 @@ function restore(d){
   state.players.forEach(p => {
     p.cash = 0; p.debt = 0; p.pos = 0; p.bankrupt = false;
     p.stock = 0; p.savedOnce = false; p.bridge = 0; p.freePass = false;
+    p.inJail = false; p.jailFail = 0; p.scenicTurns = 0; p.scenicName = "";
   });
   d.players.forEach(s => {
     const p = state.players[s.id];
     p.cash = s.cash; p.debt = s.debt; p.pos = s.pos; p.bankrupt = s.bankrupt;
     p.stock = s.stock; p.savedOnce = s.savedOnce; p.bridge = s.bridge; p.freePass = s.freePass;
+    p.inJail = !!s.inJail; p.jailFail = s.jailFail || 0;
+    p.scenicTurns = s.scenicTurns || 0; p.scenicName = s.scenicName || "";
   });
   allCells().forEach(c => { if (c.t === "plot"){ c.owner = null; c.lv = 0; } });
   d.cells.forEach(s => {
@@ -1003,11 +1214,14 @@ function newGame(charId, diff, chapter){
   const me = CHARS.find(c => c.id === charId);
   const others = CHARS.filter(c => c.id !== charId);
   const roster = [me, ...others.slice(0, 3)];
+  // 起始资金随时代系数缩放，否则第四章地价翻倍、起手钱没变，一块也买不起
+  const eraAtStart = ERA[2010 + Math.floor(CHAPTERS[chapter].from / 12)] || 1;
   state.players = roster.map((c, i) => ({
     id:i, charId:c.id, name:c.name, color:c.color, trait:c.trait,
-    human: SIM ? false : i === 0, cash:c.cash, debt:0, pos:0, stock:0,
+    human: SIM ? false : i === 0, cash:Math.round(c.cash * eraAtStart), debt:0, pos:0, stock:0,
     bankrupt:false, savedOnce:false, skipBuy:false, freePass:false,
-    bridge:0, revalue:1, skipBao:false, risk:0
+    bridge:0, revalue:1, skipBao:false, risk:0,
+    inJail:false, jailFail:0, scenicTurns:0, scenicName:""
   }));
 
   // 从中途章节开局：把此前发生过的事件补演一遍，保证热度、政策、等级上限与历史一致
@@ -1021,6 +1235,7 @@ function newGame(charId, diff, chapter){
   $("#log").innerHTML = "";
   log(`<b>${curCh().name}</b> 开始。${monthLabel(state.absMonth)}，${me.name} 带着 ${me.cash} 万进场。`, "sys");
   log(`对手：${others.slice(0, 3).map(c => c.name).join("、")}。`, "");
+  logSep(state.players[0], true);
   updateButton();
   if (!state.players[0].human) setTimeout(roll, 500);
 }
@@ -1031,8 +1246,11 @@ function updateButton(){
   if (state.over){ btn.disabled = false; btn.innerHTML = "重新开始<small>回到开局</small>"; return; }
   const p = state.players[state.turnIdx];
   btn.disabled = state.busy || !p.human;
-  btn.innerHTML = state.busy ? "行动中…<small>请稍候</small>"
-    : (p.human ? "掷 骰<small>点一下，走一步</small>" : `${p.name}行动中<small>稍等片刻</small>`);
+  if (state.busy){ btn.innerHTML = "行动中…<small>请稍候</small>"; return; }
+  if (!p.human){ btn.innerHTML = `${p.name}行动中<small>稍等片刻</small>`; return; }
+  if (p.inJail){ btn.innerHTML = `掷骰出狱<small>偶数可出，已关 ${p.jailFail}/${CFG.jailFailMax}</small>`; return; }
+  if (p.scenicTurns > 0){ btn.innerHTML = `跳过本回合<small>${p.scenicName || "景区"}，剩 ${p.scenicTurns} 回合</small>`; return; }
+  btn.innerHTML = "掷 骰<small>点一下，走一步</small>";
 }
 
 /* ---------------- 菜单 ---------------- */
