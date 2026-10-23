@@ -4,7 +4,8 @@
 
 const $ = s => document.querySelector(s);
 const SIM = location.search.indexOf("sim") >= 0;
-const SPEED = SIM ? 0.06 : 1;
+const FAST = location.search.indexOf("fast") >= 0;
+const SPEED = FAST ? 0 : (SIM ? 0.06 : 1);
 const sleep = ms => new Promise(r => setTimeout(r, ms * SPEED));
 const fmt = n => (n < 0 ? "-" : "") + Math.abs(Math.round(n)).toLocaleString();
 const rnd = n => Math.floor(Math.random() * n);
@@ -118,12 +119,22 @@ function tollParts(c){
 }
 const tollOf = c => (c.lv > 0 && !c.broken ? tollParts(c).total : 0);
 
-/* 实际支付：单次不超过支付方净资产的 30%（V1.1） */
+/* 杠杆率 = 负债 / 净资产（净资产已扣除负债，所以 > 1 意味着资不抵债） */
+function leverage(p){
+  const nw = netWorth(p);
+  if (nw <= 0) return 9;
+  return p.debt / nw;
+}
+/* 单次上限是否对这名玩家生效：高杠杆玩家不享受保护（V1.2） */
+const cappedFor = p => leverage(p) <= CFG.levThreshold;
+
+/* 实际支付：净资产型玩家单次不超过净资产 30%；高杠杆玩家全额支付 */
 function tollFor(payer, c){
   const raw = tollOf(c);
+  if (!cappedFor(payer)) return { pay: raw, cut: 0, raw, exempt: true };
   const cap = Math.round(Math.max(0, netWorth(payer)) * CFG.tollCap);
-  if (raw > cap) return { pay: cap, cut: raw - cap, raw };
-  return { pay: raw, cut: 0, raw };
+  if (raw > cap) return { pay: cap, cut: raw - cap, raw, exempt: false };
+  return { pay: raw, cut: 0, raw, exempt: false };
 }
 const upCost = c => Math.round(value(c) * CFG.upRate);
 
@@ -221,6 +232,17 @@ function renderHUD(){
       c.onclick = e => { e.stopPropagation(); showTip(c, m.key); };
       pol.appendChild(c);
     });
+  }
+
+  // 高杠杆警示：超过阈值就不再享受单次上限保护
+  const meP = state.players[0];
+  if (state.started && meP && !meP.bankrupt && !cappedFor(meP)){
+    const w = document.createElement("span");
+    w.className = "chip";
+    w.style.cssText = "background:#B3261E;color:#fff";
+    w.textContent = `高杠杆 ${Math.round(leverage(meP) * 100)}% · 无上限保护`;
+    w.onclick = e => { e.stopPropagation(); toast("单次过路费不再封顶，先还债或留足现金"); };
+    pol.appendChild(w);
   }
 
   // 旧环资产
@@ -504,6 +526,10 @@ function askBank(p){
       <div class="kv"><span>现金</span><b>${fmt(p.cash)} 万</b></div>
       <div class="kv"><span>负债</span><b>${fmt(p.debt)} 万</b></div>
       <div class="kv"><span>净资产</span><b>${fmt(netWorth(p))} 万</b></div>
+      <div class="kv"><span>杠杆率</span><b style="${cappedFor(p) ? "" : "color:#B3261E"}">${Math.round(leverage(p) * 100)}%${cappedFor(p) ? "" : "（不受上限保护）"}</b></div>
+      <p class="sub" style="margin-top:6px">${cappedFor(p)
+        ? `杠杆率超过 ${CFG.levThreshold * 100}% 后，单次过路费将不再封顶。`
+        : `<b style="color:#B3261E">已超过 ${CFG.levThreshold * 100}% 杠杆线，被对手踩中时不再有单次上限保护。</b>`}</p>
       <div class="btns">
         <button class="btn-sub" onclick="__bank(0)">不办</button>
         <button class="btn-sub" ${p.debt > 0 ? "" : "disabled"} onclick="__bank('repay')">还款</button>
@@ -646,6 +672,7 @@ async function landOn(p, c){
       const chain = t.pay > 0 && adjacentBonus(c) > 1 ? "（连片 ×2）" : "";
       log(`<b>${p.name}</b> 踩到 ${c.owner.name} 的 ${c.name}${chain}，付过路费 <b>-${fmt(t.pay)}</b> 万`, "bad");
       if (t.cut > 0) log(`　单次上限为净资产 ${CFG.tollCap * 100}%，经调解减免 ${fmt(t.cut)} 万`, "sys");
+      if (t.exempt) log(`　杠杆率 ${Math.round(leverage(p) * 100)}%，超过 ${CFG.levThreshold * 100}%，不享受上限保护`, "sys");
     }
     renderCells(); renderHUD();
     return;
@@ -810,16 +837,28 @@ function auction(plots, exclude){
 }
 
 /* ---------------- AI ----------------
+   每个角色一套风险偏好：lev = 目标杠杆上限，sellAt = 现金跌到安全垫的多少比例才卖地，
+   buy = 买地门槛（越低越敢出手）。温老板低 sellAt + 高 lev，就是「暴富与爆仓」的来源。
    V1.1 经济下的三条原则：
    1. 现金垫按「平均一次过路费」算，不再按「每圈白拿 150 万」算
    2. 连片让过路费翻倍，所以相邻自有地是最高优先级的购买理由
    3. 夹在对手两格中间的地，买下就是拆掉对手的 ×2
 */
+const RISK = {
+  hang: { lev:0.20, sellAt:0.30, buy:1.00 },   // 稳健：不借多，也不慌着卖
+  wen:  { lev:0.55, sellAt:0.10, buy:0.85 },   // 激进：借到上限，几乎不止损
+  ma:   { lev:0.35, sellAt:0.25, buy:0.95 },   // 单点重仓
+  lian: { lev:0.12, sellAt:0.35, buy:1.05 },   // 收租流：最不爱借钱，但也不乱卖
+  bao:  { lev:0.40, sellAt:0.15, buy:0.85 },   // 投机
+  wang: { lev:0.25, sellAt:0.28, buy:0.90 }    // 情报流
+};
+const riskOf = p => RISK[p.charId] || RISK.hang;
+
 function avgToll(p){
   const plots = allCells().filter(c => c.t === "plot" && c.owner && c.owner !== p && c.lv > 0 && !c.broken);
   if (!plots.length) return 0;
   const avg = plots.reduce((s, c) => s + tollOf(c), 0) / plots.length;
-  return Math.min(avg, Math.max(0, netWorth(p)) * CFG.tollCap);
+  return cappedFor(p) ? Math.min(avg, Math.max(0, netWorth(p)) * CFG.tollCap) : avg;
 }
 /* 目标现金垫：够付一次平均过路费 + 两个月利息 */
 function aiNeed(p){
@@ -840,7 +879,7 @@ function aiBuy(p, c){
   // 若场上还有「贴着我的地」的空地，留钱等它，别把钱花在无关地块上
   const hasAdjTarget = d.vision >= 1 && allCells().some(x =>
     x.t === "plot" && !x.owner && x.unlocked && !x.broken && adjCount(p, x) > 0);
-  const reserve = need * (adj ? 0.5 : (hasAdjTarget ? 1.8 : 1));
+  const reserve = need * (adj ? 0.5 : (hasAdjTarget ? 1.8 : 1)) * (0.55 + 0.45 * riskOf(p).sellAt / 0.6);
   if (p.cash - price - fee < reserve) return false;
 
   // 跟风型：只看热度，冷区不碰
@@ -882,8 +921,10 @@ function aiPreTurn(p){
   const need = aiNeed(p);
   const interest = Math.round(p.debt * loanRate());
 
-  // 1) 保命：现金跌破安全垫 45% 就卖地，先卖「不连片、单价低」的
-  if (p.cash < need * 0.45){
+  const risk = riskOf(p);
+
+  // 1) 保命：现金跌破各自的止损线就卖地，先卖「不连片、单价低」的
+  if (p.cash < need * risk.sellAt){
     const list = owned(p)
       .filter(c => !(hasPolicy("noSell") && state.absMonth - c.boughtAt < 3))
       .sort((a, b) => (value(a) * (adjCount(p, a) ? 2 : 1)) - (value(b) * (adjCount(p, b) ? 2 : 1)));
@@ -895,9 +936,11 @@ function aiPreTurn(p){
 
   // 2) 备弹：新经济下「现金主要来自对手」，所以要有钱在落地时出手。
   //    月租 0.8%—2.0% 高于贷款月息 0.48%，借钱买地是正利差，值得加杠杆。
-  const ammo = need + marketPrice() * 0.8;
+  // 激进角色备弹更厚：借钱不是为了救急，是为了下一次落地能直接拿下
+  const ammo = need + marketPrice() * (risk.lev >= 0.35 ? 2.2 : 0.8);
   const lev = p.debt / Math.max(1, netWorth(p));
-  const maxLev = { easy:0.12, normal:0.28, hard:0.45 }[state.diff] || 0.28;
+  // 角色风险偏好 × 难度系数：老狐狸比跟风型更敢借
+  const maxLev = Math.min(0.6, risk.lev * (0.75 + 0.5 * d.lever));
   if (p.cash < ammo && lev < maxLev && loanCap(p) >= 100){
     const want = Math.min(ammo - p.cash, loanCap(p), CFG.loanStep);
     if (want >= 80) doLoan(p, Math.round(want));
@@ -936,7 +979,7 @@ function nextTurn(){
   if (!state.over) logSep(p, newMonth);
   if (!p.human && !state.over){
     aiPreTurn(p);
-    setTimeout(roll, 380);
+    setTimeout(roll, FAST ? 0 : 380);
   }
 }
 
@@ -1075,7 +1118,7 @@ function nextChapter(){
   $("#log").innerHTML = "";
   log(`<b>${CHAPTERS[next].name}</b> 开始。资产按 40% 折算，保留 1 宗地块。`, "sys");
   updateButton();
-  if (!state.players[state.turnIdx].human) setTimeout(roll, 500);
+  if (!state.players[state.turnIdx].human) setTimeout(roll, FAST ? 0 : 500);
 }
 
 /* ---------------- 存档 ---------------- */
@@ -1147,7 +1190,7 @@ function restore(d){
   $("#log").innerHTML = "";
   log(`读取存档：${monthLabel(state.absMonth)}，继续。`, "sys");
   updateButton();
-  if (!state.players[state.turnIdx].human) setTimeout(roll, 500);
+  if (!state.players[state.turnIdx].human) setTimeout(roll, FAST ? 0 : 500);
 }
 
 /* ---------------- 开局 ---------------- */
@@ -1237,7 +1280,7 @@ function newGame(charId, diff, chapter){
   log(`对手：${others.slice(0, 3).map(c => c.name).join("、")}。`, "");
   logSep(state.players[0], true);
   updateButton();
-  if (!state.players[0].human) setTimeout(roll, 500);
+  if (!state.players[0].human) setTimeout(roll, FAST ? 0 : 500);
 }
 
 function updateButton(){
