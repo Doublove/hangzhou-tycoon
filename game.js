@@ -865,12 +865,20 @@ async function roll(){
     state.busy = false; nextTurn(); return;
   }
 
-  // 停留卡：本回合不移动
+  // 停留卡：本回合不移动，但重新触发脚下的地块（V1.5 改）
   if (p.skipMove){
     p.skipMove = false;
-    log(`<b>${p.name}</b> 用停留卡原地不动`, "");
-    toast(`${p.name} 停留一回合`);
+    const here = curCells()[p.pos];
+    log(`<b>${p.name}</b> 用停留卡原地不动，重新触发 <b>${here.name}</b>`, "");
+    toast(`${p.name} 停留在${here.name}`);
     await sleep(320);
+    if (here.t === "start"){
+      payPassGo(p, "停在起点");
+    } else {
+      await landOn(p, here);
+      await settle(p);
+    }
+    renderHUD();
     state.busy = false; nextTurn(); return;
   }
 
@@ -886,17 +894,23 @@ async function roll(){
   nextTurn();
 }
 
+/* 起点结算：正向经过、反向重回、停在起点，三种情况共用 */
+function payPassGo(p, how){
+  const extra = Math.round(Math.max(0, p.cash) * CFG.passGoRate);
+  const bonus = CFG.passGo + extra;
+  p.cash += bonus;
+  log(`<b>${p.name}</b> ${how || "经过起点"}，月供 +${CFG.passGo} 万，另按现金 ${CFG.passGoRate * 100}% 得 +${fmt(extra)} 万，共 <b>+${fmt(bonus)}</b> 万`, "good");
+  return bonus;
+}
+
 async function move(p, steps, dir = 1){
   const cells = curCells(), n = cells.length;
   for (let i = 0; i < steps; i++){
     const prev = p.pos;
     p.pos = (p.pos + dir + n) % n;
-    // 反向移动不领月供，否则可以用掉头卡刷钱
-    if (dir > 0 && p.pos === 0 && prev !== 0){
-      const extra = Math.round(Math.max(0, p.cash) * CFG.passGoRate);
-      const bonus = CFG.passGo + extra;
-      p.cash += bonus;
-      log(`<b>${p.name}</b> 经过起点，月供 +${CFG.passGo} 万，另按现金 ${CFG.passGoRate * 100}% 得 +${fmt(extra)} 万，共 <b>+${fmt(bonus)}</b> 万`, "good");
+    // 正反向经过起点都结算（V1.5 改：反向不再例外）
+    if (p.pos === 0 && prev !== 0){
+      payPassGo(p, dir > 0 ? "经过起点" : "反向重回起点");
     }
     renderTokens();
     await sleep(130);
@@ -1359,10 +1373,19 @@ function aiUseItems(p){
 
   const need = aiNeed(p);
 
-  // 1) 停留卡：前方两格内有重雷
+  // 1) 停留卡：会重新触发脚下地块，所以只在「安全或有赚」的格子上用
   if (itemCount(p, "stay") && !p.skipMove){
-    const worst = Math.max(tollAhead(p, 1), tollAhead(p, 2));
-    if (worst > need * 0.8 && Math.random() < 0.7) { useStayItem(p); return; }
+    const here = curCells()[p.pos];
+    const mine = here.t === "plot" && here.owner === p;
+    const free = here.t === "plot" && !here.owner && here.unlocked && !here.broken;
+    const safe = here.t === "start" || here.t === "chance" || here.t === "bank" || mine || free;
+    if (safe){
+      const canUp = mine && here.lv < here.maxLv && p.cash > upCost(here) + need * 0.5;
+      const canBuy = free && p.cash > value(here) * 1.35;
+      const onStart = here.t === "start" && p.cash < need * 1.5;
+      const worst = Math.max(tollAhead(p, 1), tollAhead(p, 2));
+      if (canUp || canBuy || onStart || worst > need * 0.8) useStayItem(p);
+    }
   }
 
   // 2) 遥控骰子：挑一个「雷最小、收益最大」的点数
@@ -1388,11 +1411,12 @@ function aiUseItems(p){
     if (mine.length && tollOf(mine[0]) > need * 0.6) placeBlock(p, mine[0]);
   }
 
-  // 4) 掉头卡：前方全是雷，后方有便宜地
-  if (itemCount(p, "uturn") && !p.reverse && Math.random() < 0.35){
+  // 4) 掉头卡：后方有便宜地可捡，或前方连着重雷
+  if (itemCount(p, "uturn") && !p.reverse && Math.random() < 0.6){
     const ahead = Math.max(tollAhead(p, 1), tollAhead(p, 2), tollAhead(p, 3));
-    const behind = cellAhead(p, -1);
-    if (ahead > need * 0.7 && behind.t === "plot" && !behind.owner && behind.unlocked) useUturnItem(p);
+    const b1 = cellAhead(p, -1), b2 = cellAhead(p, -2);
+    const grab = [b1, b2].some(c => c.t === "plot" && !c.owner && c.unlocked && !c.broken && p.cash > value(c) * 1.3);
+    if (grab || ahead > need * 0.6) useUturnItem(p);
   }
 }
 
