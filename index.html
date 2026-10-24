@@ -88,8 +88,42 @@
     50%{transform:translate(-50%,calc(-50% - 3px))}
   }
 
+  /* 道具条 */
+  #items{display:flex;gap:5px}
+  #items .item{flex:1;display:flex;flex-direction:column;align-items:center;gap:0;
+    background:#fff;border:2px solid var(--line);border-radius:10px;padding:3px 2px 2px;
+    color:var(--ink);cursor:pointer;box-shadow:0 2px 0 var(--line);line-height:1.15}
+  #items .item .ic{font-size:12px;line-height:1}
+  #items .item b{font-size:11px;font-variant-numeric:tabular-nums}
+  #items .item .nm{font-size:8px;color:var(--ink-soft)}
+  #items .item.off{opacity:.35;box-shadow:none;cursor:not-allowed}
+  #items .item:active:not(.off){transform:translateY(2px);box-shadow:0 0 0 var(--line)}
+
+  /* 连片特效 */
+  .chainlink{position:absolute;height:6px;border-radius:3px;transform-origin:0 50%;
+    margin-top:-3px;opacity:.9;z-index:4;pointer-events:none;box-shadow:0 0 6px 1px currentColor}
+  .cell.chain{animation:chainPulse 2.2s ease-in-out infinite}
+  @keyframes chainPulse{
+    0%,100%{box-shadow:inset 0 0 0 3px var(--owner,#ccc)}
+    50%{box-shadow:inset 0 0 0 3px var(--owner,#ccc),0 0 9px 1px var(--owner,#ccc)}
+  }
+  .cell.blocked::after{content:"⛔";position:absolute;right:0;top:-2px;font-size:10px;line-height:1}
+  .cell.chain[data-chain]::before{content:attr(data-chain);position:absolute;left:-3px;top:-6px;
+    font-size:8px;font-weight:700;line-height:1;padding:1px 3px;border-radius:5px;
+    background:var(--owner,#999);color:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);z-index:3}
+  .chainlink::before,.chainlink::after{content:"";position:absolute;top:50%;width:6px;height:6px;
+    margin-top:-3px;border-radius:50%;background:inherit}
+  .chainlink::before{left:-3px}
+  .chainlink::after{right:-3px}
+
   /* 操作 */
   #bar{display:flex;gap:7px}
+  #skill{width:78px;border:2px solid var(--line);border-radius:13px;background:#fff;
+    font-size:11px;font-weight:700;color:var(--ink-soft);cursor:pointer;
+    box-shadow:0 3px 0 var(--line);line-height:1.2;padding:4px 2px}
+  #skill small{display:block;font-size:8.5px;font-weight:400;color:#9A9184}
+  #skill.ready{background:#FFF4D6;border-color:var(--gold);color:#7A5C00;box-shadow:0 3px 0 #9E7F14}
+  #skill:disabled{opacity:.5;cursor:not-allowed}
   #roll{flex:1;padding:12px;border:none;border-radius:13px;background:var(--teal);color:#fff;
         font-size:16px;font-weight:700;letter-spacing:2px;cursor:pointer;box-shadow:0 3px 0 #1F5A50;
         transition:transform .06s}
@@ -195,7 +229,10 @@
     <div class="core"><b>杭州</b><span>2010 — 2026</span></div>
   </div>
 
+  <div id="items"></div>
+
   <div id="bar">
+    <button id="skill" style="display:none">技能</button>
     <button id="roll">选择角色开始</button>
     <button id="menu">菜单</button>
   </div>

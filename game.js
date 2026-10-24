@@ -265,6 +265,86 @@ function renderHUD(){
     }).filter(Boolean);
     legacy.textContent = rows.length ? "旧环资产：" + rows.join("　") : "";
   }
+
+  renderItems();
+  renderSkillBtn();
+}
+
+/* ---------------- 道具条与技能按钮 ---------------- */
+function renderItems(){
+  const box = $("#items");
+  if (!box) return;
+  if (!state.started || !state.players.length){ box.innerHTML = ""; return; }
+  // 始终显示人类玩家自己的道具，而不是当前行动者（AI 回合时不该看到 AI 的库存）
+  const p = humanPlayer() || (SIM ? state.players[state.turnIdx] : null);
+  if (!p){ box.innerHTML = ""; return; }
+  const canUse = p.human && state.turnIdx === p.id && !state.busy && !state.over;
+  box.innerHTML = ITEM_KEYS.map(k => {
+    const n = itemCount(p, k);
+    const on = canUse && n > 0;
+    return `<button class="item${on ? "" : " off"}" data-item="${k}" ${on ? "" : "disabled"} title="${ITEMS[k].desc}">
+      <span class="ic">${ITEMS[k].icon}</span><b>${n}</b><span class="nm">${ITEMS[k].name}</span>
+    </button>`;
+  }).join("");
+  box.querySelectorAll(".item").forEach(b => {
+    b.onclick = () => onItemClick(b.dataset.item);
+  });
+}
+
+function renderSkillBtn(){
+  const btn = $("#skill");
+  if (!btn) return;
+  if (!state.started || !state.players.length){ btn.style.display = "none"; return; }
+  const p = humanPlayer() || (SIM ? state.players[state.turnIdx] : null);
+  const a = p ? activeOf(p) : null;
+  if (!a){ btn.style.display = "none"; return; }
+  btn.style.display = "";
+  const ready = p.skillCd <= 0 && (p.human ? state.turnIdx === p.id : true) && !state.busy && !state.over;
+  btn.disabled = !ready;
+  btn.classList.toggle("ready", ready);
+  btn.innerHTML = p.skillCd > 0
+    ? `${a.name}<small>冷却 ${p.skillCd} 月</small>`
+    : `${a.name}<small>${p.human ? "点一下发动" : "AI"}</small>`;
+  btn.onclick = () => { if (ready) useSkill(p); };
+}
+
+function humanPlayer(){ return state.players.find(x => x.human) || null; }
+
+function onItemClick(k){
+  const p = humanPlayer();
+  if (!p || !p.human || state.busy) return;
+  if (state.turnIdx !== p.id){ toast("等你的回合再用"); return; }
+  if (p.inJail && k !== "dice"){ toast("关押期间只能用遥控骰子"); return; }
+  if (p.scenicTurns > 0){ toast("度假中不能使用道具"); return; }
+
+  if (k === "dice"){
+    openSheet(`<h3>遥控骰子</h3>
+      <p class="sub">指定下一次掷骰的点数。${p.inJail ? "关押中：选偶数可直接出狱。" : ""}</p>
+      <div class="btns" style="flex-wrap:wrap">
+        ${[1,2,3,4,5,6].map(n => `<button class="btn-sub" style="min-width:60px" onclick="__pick(${n})">${n}</button>`).join("")}
+      </div>
+      <div class="btns"><button class="btn-sub" onclick="closeSheet()">取消</button></div>`);
+    window.__pick = n => { closeSheet(); useDiceItem(p, n); };
+    return;
+  }
+  if (k === "stay"){ useStayItem(p); return; }
+  if (k === "uturn"){ useUturnItem(p); return; }
+  if (k === "block"){
+    if (state.placing === "block"){ state.placing = null; toast("已取消放置"); return; }
+    state.placing = "block";
+    toast("点击棋盘上任意格放置路障");
+    return;
+  }
+}
+
+/* 点击棋盘：放置模式下放路障，否则打开详情 */
+function onCellClick(cell){
+  if (state.placing === "block"){
+    const p = humanPlayer();
+    if (p && p.human && placeBlock(p, cell)) state.placing = null;
+    return;
+  }
+  showCell(cell);
 }
 
 function renderBoard(){
@@ -290,7 +370,7 @@ function renderBoard(){
     el.dataset.i = i;
     el.style.left = (50 + R * Math.cos(a)) + "%";
     el.style.top = (50 + R * Math.sin(a)) + "%";
-    el.onclick = () => showCell(cell);
+    el.onclick = () => onCellClick(cell);
     el.innerHTML = cell.t === "plot"
       ? `<span class="nm">${cell.name}</span><span class="lv"></span><span class="bar"></span>`
       : `<span class="nm">${cell.name}</span>`;
@@ -304,10 +384,15 @@ function renderCells(){
   cells.forEach(cell => {
     const el = document.querySelector(`.cell[data-i="${cell.idx}"]`);
     if (!el) return;
+    el.classList.toggle("blocked", !!cell.block);
     if (cell.t === "jail" || cell.t === "scenic"){ el.classList.add(cell.t); return; }
     if (cell.t !== "plot") return;
     el.classList.toggle("locked", !cell.unlocked);
     el.classList.toggle("broken", !!cell.broken);
+    const chained = !!cell.owner && adjacentBonus(cell) > 1;
+    el.classList.toggle("chain", chained);
+    el.dataset.chain = chained ? "×2" : "";
+    el.style.background = chained ? cell.owner.color + "1F" : "";
     el.querySelector(".lv").textContent = cell.lv ? "●".repeat(cell.lv) : "";
     const bar = el.querySelector(".bar");
     if (cell.owner){
@@ -319,6 +404,37 @@ function renderCells(){
       el.style.removeProperty("--owner");
       bar.style.background = cell.unlocked ? REGIONS[cell.region].color + "66" : "transparent";
     }
+  });
+  renderChains();
+}
+
+/* 连片特效：沿环外侧画一条同色连接带，把相邻同主的两格串起来
+   （格子间距只有 3px，画在格间会完全被遮住，所以外扩到环外） */
+function renderChains(){
+  const wrap = $("#boardWrap");
+  if (!wrap) return;
+  wrap.querySelectorAll(".chainlink").forEach(n => n.remove());
+  const cells = curCells(), n = cells.length, R = 43;
+  const W = wrap.clientWidth || 400;
+  const Rp = R / 100 * W;              // 环半径（像素）
+  const railR = Rp - Math.max(26, W * 0.062);   // 画在环内侧的空白区，不压格子也不出界
+  cells.forEach((c, i) => {
+    if (c.t !== "plot" || !c.owner) return;
+    if (i === n - 1) return;                       // 首尾不连（跨起点）
+    const nb = cells[(i + 1) % n];
+    if (nb.t !== "plot" || nb.owner !== c.owner) return;
+
+    const a1 = (-90 + i * 360 / n) * Math.PI / 180;
+    const a2 = (-90 + (i + 1) * 360 / n) * Math.PI / 180;
+    const x1 = W / 2 + railR * Math.cos(a1), y1 = W / 2 + railR * Math.sin(a1);
+    const x2 = W / 2 + railR * Math.cos(a2), y2 = W / 2 + railR * Math.sin(a2);
+    const dx = x2 - x1, dy = y2 - y1;
+    const len = Math.hypot(dx, dy);
+    if (len < 6) return;
+    const d = document.createElement("div");
+    d.className = "chainlink";
+    d.style.cssText = `left:${x1}px;top:${y1}px;width:${len}px;transform:rotate(${Math.atan2(dy, dx) * 180 / Math.PI}deg);background:${c.owner.color}`;
+    wrap.appendChild(d);
   });
 }
 
@@ -408,6 +524,7 @@ function showTip(el, key){
 function hideTip(){ $("#tip").classList.remove("show"); }
 document.addEventListener("click", hideTip);
 window.addEventListener("scroll", hideTip, true);
+window.addEventListener("resize", () => { if (state.started) renderChains(); });
 
 /* ---------------- 弹窗 ---------------- */
 function openSheet(html){ $("#sheet").innerHTML = html; $("#modal").classList.remove("hidden"); }
@@ -568,6 +685,140 @@ function askStock(p){
 }
 
 /* ---------------- 回合 ---------------- */
+/* ---------------- 道具 ---------------- */
+function itemCount(p, k){ return (p.items && p.items[k]) || 0; }
+
+function giveItem(p, k, n = 1, quiet){
+  if (!p.items) p.items = {};
+  p.items[k] = (p.items[k] || 0) + n;
+  if (!quiet){
+    log(`<b>${p.name}</b> 获得【${ITEMS[k].name}】×${n}`, "good");
+    toast(`${p.name} 得到 ${ITEMS[k].name}`);
+  }
+  renderItems();
+}
+
+function takeItem(p, k){
+  if (!itemCount(p, k)) return false;
+  p.items[k]--;
+  renderItems();
+  return true;
+}
+
+/* 特定格子的小概率掉落 */
+function dropItem(p, k, chance, reason){
+  if (Math.random() < chance){
+    giveItem(p, k, 1);
+    log(`　在${reason}掉落【${ITEMS[k].name}】`, "good");
+  }
+}
+
+/* 机会格的随机道具：遥控骰子最常见，路障最稀有 */
+function randomItemKey(){
+  const r = Math.random();
+  if (r < 0.40) return "dice";
+  if (r < 0.70) return "stay";
+  if (r < 0.90) return "uturn";
+  return "block";
+}
+
+function useDiceItem(p, n){
+  if (!takeItem(p, "dice")) return false;
+  p.nextRoll = n;
+  log(`<b>${p.name}</b> 用遥控骰子指定 <b>${n}</b> 点`, "");
+  updateButton(); return true;
+}
+function useStayItem(p){
+  if (!takeItem(p, "stay")) return false;
+  p.skipMove = true;
+  log(`<b>${p.name}</b> 使用停留卡，本回合原地不动`, "");
+  updateButton(); return true;
+}
+function useUturnItem(p){
+  if (!takeItem(p, "uturn")) return false;
+  p.reverse = true;
+  log(`<b>${p.name}</b> 使用掉头卡，下一次反向移动`, "");
+  updateButton(); return true;
+}
+function placeBlock(p, cell){
+  if (cell.t === "start" || cell.t === "jail" || cell.t === "scenic"){ toast("这里不能放路障"); return false; }
+  if (cell.block){ toast("这一格已经有路障"); return false; }
+  if (!takeItem(p, "block")) return false;
+  cell.block = true;
+  log(`<b>${p.name}</b> 在 <b>${cell.name}</b> 放置路障`, "");
+  renderCells();
+  return true;
+}
+
+/* ---------------- 主动技能 ---------------- */
+const activeOf = p => (CHARS.find(c => c.id === p.charId) || {}).active || null;
+
+function topRegionOf(p){
+  const cnt = {};
+  owned(p).forEach(c => { cnt[c.region] = (cnt[c.region] || 0) + 1; });
+  const keys = Object.keys(cnt);
+  if (!keys.length) return pick(Object.keys(REGIONS));
+  return keys.sort((a, b) => cnt[b] - cnt[a])[0];
+}
+
+function useSkill(p, quiet){
+  const a = activeOf(p);
+  if (!a || p.skillCd > 0 || p.bankrupt) return false;
+  let msg = "", ok = true;
+
+  switch (p.charId){
+    case "hang": {
+      const gain = Math.max(80, Math.round(netWorth(p) * 0.08));
+      p.cash += gain; msg = `拆迁款到账 <b>+${fmt(gain)}</b> 万`;
+      break;
+    }
+    case "wen": {
+      const amt = Math.round(Math.max(0, netWorth(p)) * 0.30);
+      if (amt < 50){ ok = false; break; }
+      p.cash += amt; p.debt += amt;
+      msg = `配资借入 <b>+${fmt(amt)}</b> 万（负债 ${fmt(p.debt)}）`;
+      break;
+    }
+    case "ma": {
+      const gain = Math.round(80 * ((state.heat["未来科技城"] || 50) / 60));
+      p.cash += gain; msg = `期权行权 <b>+${fmt(gain)}</b> 万`;
+      break;
+    }
+    case "lian": {
+      if (!p.inJail && p.scenicTurns <= 0){ ok = false; break; }
+      const was = p.inJail ? "监狱" : (p.scenicName || "景区");
+      p.inJail = false; p.jailFail = 0; p.scenicTurns = 0; p.scenicName = "";
+      p.bonusRoll = 2;
+      msg = `摇橹脱离${was}，下一次掷骰 <b>+2</b>`;
+      break;
+    }
+    case "bao": {
+      const r = topRegionOf(p);
+      heatAdd([r], 15); msg = `${r} 热度 <b>+15</b>`;
+      break;
+    }
+    case "wang": {
+      const list = curCells()
+        .filter(c => c.t === "plot" && !c.owner && c.unlocked && !c.broken)
+        .sort((a, b) => value(a) - value(b));
+      const c = list[0];
+      if (!c){ ok = false; break; }
+      const price = Math.round(value(c) * 0.85);
+      if (p.cash < price){ ok = false; break; }
+      p.cash -= price; c.owner = p; c.lv = 1; c.boughtAt = state.absMonth;
+      msg = `撮合成交 <b>${c.name}</b>（${fmt(price)} 万）`;
+      break;
+    }
+  }
+
+  if (!ok) return false;
+  p.skillCd = a.cd;
+  log(`<b>${p.name}</b> 发动【${a.name}】：${msg}`, "good");
+  if (!quiet) toast(`${a.name}：${msg.replace(/<[^>]+>/g, "")}`);
+  renderCells(); renderHUD(); updateButton();
+  return true;
+}
+
 async function roll(){
   if (state.busy || state.over || !state.started) return;
   const p = state.players[state.turnIdx];
@@ -584,35 +835,50 @@ async function roll(){
 
   if (p.charId === "bao" && !p.skipBao){ boostByBao(p); p.skipBao = true; }
 
-  const d1 = 1 + rnd(6);          // V1.3：改为单骰，避免绕圈过快
-  const sum = d1;
+  // 骰子：遥控骰子可指定点数；阿莲的「摇橹」给 +2
+  const forced = p.nextRoll || 0;
+  const raw = forced || (1 + rnd(6));
+  p.nextRoll = 0;
+  const bonus = p.bonusRoll || 0; p.bonusRoll = 0;
+  const dir = p.reverse ? -1 : 1;
+  p.reverse = false;
 
   // 监狱：掷出偶数出狱；连续 3 次未掷出则第 4 回合强制出狱
   if (p.inJail){
-    const forced = p.jailFail >= CFG.jailFailMax;
-    const even = sum % 2 === 0;
-    if (forced || even){
-      const why = forced ? "关押期满，依法释放" : `掷出 ${d1}（偶数），获释`;
+    const forcedOut = p.jailFail >= CFG.jailFailMax;
+    const even = raw % 2 === 0;
+    if (forcedOut || even){
+      const why = forcedOut ? "关押期满，依法释放" : `掷出 ${raw}（偶数），获释`;
       p.inJail = false; p.jailFail = 0;
-      log(`<b>${p.name}</b> ${why}，前进 ${sum} 格`, "good");
-      toast(forced ? "关押期满" : "掷出偶数，出狱");
+      log(`<b>${p.name}</b> ${why}，前进 ${raw + bonus} 格`, "good");
+      toast(forcedOut ? "关押期满" : "掷出偶数，出狱");
       await sleep(380);
-      await move(p, sum);
+      await move(p, raw + bonus, 1);
       await landOn(p, curCells()[p.pos]);
       await settle(p);
     } else {
       p.jailFail++;
-      log(`<b>${p.name}</b> 掷出 ${d1}（奇数），继续关押（${p.jailFail}/${CFG.jailFailMax}）`, "bad");
+      log(`<b>${p.name}</b> 掷出 ${raw}（奇数），继续关押（${p.jailFail}/${CFG.jailFailMax}）`, "bad");
       toast("奇数，继续关押");
       await sleep(420);
     }
     state.busy = false; nextTurn(); return;
   }
 
-  toast(`${p.name} 掷出 ${sum}`);
+  // 停留卡：本回合不移动
+  if (p.skipMove){
+    p.skipMove = false;
+    log(`<b>${p.name}</b> 用停留卡原地不动`, "");
+    toast(`${p.name} 停留一回合`);
+    await sleep(320);
+    state.busy = false; nextTurn(); return;
+  }
+
+  const sum = raw + bonus;
+  toast(`${p.name} 掷出 ${raw}${bonus ? `+${bonus}` : ""} = ${sum}${dir < 0 ? "（反向）" : ""}`);
   await sleep(380);
 
-  await move(p, sum);
+  await move(p, sum, dir);
   await landOn(p, curCells()[p.pos]);
   await settle(p);
 
@@ -620,13 +886,13 @@ async function roll(){
   nextTurn();
 }
 
-async function move(p, steps){
-  const cells = curCells();
+async function move(p, steps, dir = 1){
+  const cells = curCells(), n = cells.length;
   for (let i = 0; i < steps; i++){
     const prev = p.pos;
-    p.pos = (p.pos + 1) % cells.length;
-    if (p.pos === 0 && prev !== 0){
-      // V1.1：月供 1 万 + 当前现金 3%（现金为负时不发）
+    p.pos = (p.pos + dir + n) % n;
+    // 反向移动不领月供，否则可以用掉头卡刷钱
+    if (dir > 0 && p.pos === 0 && prev !== 0){
       const extra = Math.round(Math.max(0, p.cash) * CFG.passGoRate);
       const bonus = CFG.passGo + extra;
       p.cash += bonus;
@@ -634,6 +900,16 @@ async function move(p, steps){
     }
     renderTokens();
     await sleep(130);
+    // 路障：拦停并消耗
+    const c = cells[p.pos];
+    if (c && c.block){
+      c.block = false;
+      log(`<b>${p.name}</b> 在 ${c.name} 被路障拦停`, "bad");
+      toast("被路障拦下");
+      renderCells();
+      await sleep(240);
+      break;
+    }
   }
 }
 
@@ -689,7 +965,11 @@ async function landOn(p, c){
   }
 
   if (c.t === "chance" || c.t === "fate"){
-    return drawCard(p, c.t === "chance" ? CHANCE : FATE, c.t === "chance" ? "机会" : "命运");
+    await drawCard(p, c.t === "chance" ? CHANCE : FATE, c.t === "chance" ? "机会" : "命运");
+    if (c.t === "chance" && Math.random() < CFG.items.chanceDrop){
+      giveItem(p, randomItemKey(), 1);
+    }
+    return;
   }
 
   if (c.t === "bank"){
@@ -704,14 +984,16 @@ async function landOn(p, c){
   }
 
   if (c.t === "stock"){
+    let bought = false;
     if (p.human){
       const act = await askStock(p);
-      if (act === "buy"){ p.cash -= stockLot(); p.stock = (p.stock || 0) + 1; log(`<b>${p.name}</b> 买入 1 手指数`, ""); }
+      if (act === "buy"){ p.cash -= stockLot(); p.stock = (p.stock || 0) + 1; bought = true; log(`<b>${p.name}</b> 买入 1 手指数`, ""); }
       if (act === "sell"){ p.cash += stockLot(); p.stock--; log(`<b>${p.name}</b> 卖出 1 手指数`, ""); }
     } else if (p.cash > aiNeed(p) * 2.2 && Math.random() < 0.4){
-      p.cash -= stockLot(); p.stock = (p.stock || 0) + 1;
+      p.cash -= stockLot(); p.stock = (p.stock || 0) + 1; bought = true;
       log(`<b>${p.name}</b> 买入 1 手指数`, "");
     }
+    if (bought) dropItem(p, "uturn", CFG.items.stockUturn, "买入指数");
     renderHUD(); return;
   }
 
@@ -732,6 +1014,7 @@ async function landOn(p, c){
     const t = Math.round(netWorth(p) * CFG.taxRate);
     p.cash -= t;
     log(`<b>${p.name}</b> 缴税 <b>-${fmt(t)}</b> 万`, "bad");
+    dropItem(p, "stay", CFG.items.taxStay, "税务局");
     renderHUD(); return;
   }
 }
@@ -753,6 +1036,7 @@ function sendToJail(p, reason){
   p.inJail = true; p.jailFail = 0; p.scenicTurns = 0;
   renderTokens(); renderHUD();
   log(`<b>${p.name}</b> ${reason || "被带走调查"}，需掷出偶数才能继续前进`, "bad");
+  dropItem(p, "block", CFG.items.jailBlock, "监狱");
 }
 
 async function lotteryCheck(p, c){
@@ -1026,6 +1310,90 @@ function aiPreTurn(p){
   if (p.debt > 0 && interest > 0 && p.cash > ammo * 2 && Math.random() < 0.6){
     doRepay(p, Math.min(p.debt, Math.round((p.cash - ammo * 1.4) * 0.6)));
   }
+
+  // 4) 主动技能与道具
+  aiUseSkill(p);
+  aiUseItems(p);
+}
+
+/* ---------------- AI 的道具与技能 ----------------
+   和人类用同一套接口，只是判据是启发式。不给 AI 用会直接导致人类碾压。
+*/
+function cellAhead(p, k){
+  const cells = curCells(), n = cells.length;
+  return cells[((p.pos + k) % n + n) % n];
+}
+function tollAhead(p, k){
+  const c = cellAhead(p, k);
+  if (!c || c.t !== "plot" || !c.owner || c.owner === p) return 0;
+  return tollFor(p, c).pay;
+}
+
+function aiUseSkill(p){
+  if (p.skillCd > 0) return;
+  if (!activeOf(p)) return;
+  const need = aiNeed(p);
+  const mkt = marketPrice();
+  switch (p.charId){
+    // 白拿钱的技能：冷却一好就用
+    case "hang": useSkill(p, true); break;
+    case "ma":   useSkill(p, true); break;
+    // 会产生负债的：只在缺钱时用
+    case "wen":  if (p.cash < mkt) useSkill(p, true); break;
+    // 解除限制的：只在被限制时用
+    case "lian": if (p.inJail || p.scenicTurns > 0) useSkill(p, true); break;
+    // 加热度：冷却一好就用
+    case "bao":  useSkill(p, true); break;
+    // 要花钱买地：现金够才用
+    case "wang": if (p.cash > mkt * 1.2) useSkill(p, true); break;
+  }
+}
+
+function aiUseItems(p){
+  if (p.inJail){
+    // 关押中：有遥控骰子就指定偶数直接出狱
+    if (itemCount(p, "dice")) useDiceItem(p, 2);
+    return;
+  }
+  if (p.scenicTurns > 0) return;
+
+  const need = aiNeed(p);
+
+  // 1) 停留卡：前方两格内有重雷
+  if (itemCount(p, "stay") && !p.skipMove){
+    const worst = Math.max(tollAhead(p, 1), tollAhead(p, 2));
+    if (worst > need * 0.8 && Math.random() < 0.7) { useStayItem(p); return; }
+  }
+
+  // 2) 遥控骰子：挑一个「雷最小、收益最大」的点数
+  if (itemCount(p, "dice") && !p.nextRoll){
+    let best = 0, bestScore = -Infinity, worst = 0;
+    for (let k = 1; k <= 6; k++){
+      const c = cellAhead(p, k);
+      const toll = tollAhead(p, k);
+      worst = Math.max(worst, toll);
+      let sc = -toll;
+      if (c.t === "plot" && !c.owner && c.unlocked && !c.broken) sc += value(c) * 0.03;
+      if (c.t === "plot" && c.owner === p) sc += 30;
+      if (c.t === "chance") sc += 25;
+      if (c.t === "jail" || c.t === "scenic") sc -= 80;
+      if (sc > bestScore){ bestScore = sc; best = k; }
+    }
+    if (worst > need * 0.7 && bestScore > -worst * 0.4 && Math.random() < 0.6) useDiceItem(p, best);
+  }
+
+  // 3) 路障：放在自己过路费最高的地块上，等对手来踩
+  if (itemCount(p, "block") && Math.random() < 0.55){
+    const mine = owned(p).filter(c => c.lv >= 2 && !c.block).sort((a, b) => tollOf(b) - tollOf(a));
+    if (mine.length && tollOf(mine[0]) > need * 0.6) placeBlock(p, mine[0]);
+  }
+
+  // 4) 掉头卡：前方全是雷，后方有便宜地
+  if (itemCount(p, "uturn") && !p.reverse && Math.random() < 0.35){
+    const ahead = Math.max(tollAhead(p, 1), tollAhead(p, 2), tollAhead(p, 3));
+    const behind = cellAhead(p, -1);
+    if (ahead > need * 0.7 && behind.t === "plot" && !behind.owner && behind.unlocked) useUturnItem(p);
+  }
 }
 
 function boostByBao(p){
@@ -1078,6 +1446,7 @@ async function endMonth(){
       else if (c.boost < 0) c.boost++;
       if (c.boost === 0) c.boost = 0;
     });
+    if (p.skillCd > 0) p.skillCd--;
     if (p.debt > 0) p.cash -= Math.round(p.debt * loanRate());
     if (p.bridge > 0){ p.bridge--; if (p.bridge === 0) p.cash -= 200; }
     p.revalue = 1;
@@ -1204,6 +1573,7 @@ function nextChapter(){
     p.stock = 0; p.bridge = 0; p.revalue = 1;
     p.inJail = false; p.jailFail = 0; p.scenicTurns = 0; p.scenicName = "";
     p.liquidating = false; p.liqDeadline = 0;
+    p.nextRoll = 0; p.reverse = false; p.skipMove = false; p.bonusRoll = 0; p.skillCd = 0;
   });
 
   state.chapter = next;
@@ -1230,13 +1600,14 @@ function serialize(){
     cells: allCells().filter(c => c.t === "plot").map(c => ({
       ring:c.ring, idx:c.idx, lv:c.lv, owner:c.owner ? c.owner.id : null,
       unlocked:c.unlocked, boughtAt:c.boughtAt, broken:c.broken, boost:c.boost,
-      discount:c.discount, maxLv:c.maxLv
+      discount:c.discount, maxLv:c.maxLv, block:!!c.block
     })),
     players: state.players.map(p => ({
       id:p.id, cash:p.cash, debt:p.debt, pos:p.pos, bankrupt:p.bankrupt,
       stock:p.stock || 0, savedOnce:!!p.savedOnce, bridge:p.bridge || 0, freePass:!!p.freePass,
       inJail:!!p.inJail, jailFail:p.jailFail || 0, scenicTurns:p.scenicTurns || 0, scenicName:p.scenicName || "",
-      liquidating:!!p.liquidating, liqDeadline:p.liqDeadline || 0
+      liquidating:!!p.liquidating, liqDeadline:p.liqDeadline || 0,
+      items:p.items || {}, skillCd:p.skillCd || 0
     }))
   };
 }
@@ -1271,6 +1642,8 @@ function restore(d){
     p.stock = 0; p.savedOnce = false; p.bridge = 0; p.freePass = false;
     p.inJail = false; p.jailFail = 0; p.scenicTurns = 0; p.scenicName = "";
     p.liquidating = false; p.liqDeadline = 0;
+    p.items = Object.assign({}, CFG.items.start);
+    p.skillCd = 0; p.nextRoll = 0; p.reverse = false; p.skipMove = false; p.bonusRoll = 0;
   });
   d.players.forEach(s => {
     const p = state.players[s.id];
@@ -1279,13 +1652,16 @@ function restore(d){
     p.inJail = !!s.inJail; p.jailFail = s.jailFail || 0;
     p.scenicTurns = s.scenicTurns || 0; p.scenicName = s.scenicName || "";
     p.liquidating = !!s.liquidating; p.liqDeadline = s.liqDeadline || 0;
+    if (s.items) p.items = Object.assign({}, CFG.items.start, s.items);
+    p.skillCd = s.skillCd || 0;
   });
-  allCells().forEach(c => { if (c.t === "plot"){ c.owner = null; c.lv = 0; } });
+  allCells().forEach(c => { if (c.t === "plot"){ c.owner = null; c.lv = 0; } c.block = false; });
   d.cells.forEach(s => {
     const c = state.rings[s.ring].cells[s.idx];
     if (!c) return;
     c.lv = s.lv; c.unlocked = s.unlocked; c.boughtAt = s.boughtAt;
     c.broken = s.broken; c.boost = s.boost; c.discount = s.discount; c.maxLv = s.maxLv;
+    c.block = !!s.block;
     c.owner = s.owner == null ? null : state.players[s.owner];
   });
   render();
@@ -1367,7 +1743,9 @@ function newGame(charId, diff, chapter){
     bankrupt:false, savedOnce:false, skipBuy:false, freePass:false,
     bridge:0, revalue:1, skipBao:false, risk:0,
     inJail:false, jailFail:0, scenicTurns:0, scenicName:"",
-    liquidating:false, liqDeadline:0
+    liquidating:false, liqDeadline:0,
+    items: Object.assign({}, CFG.items.start, c.items || {}),
+    skillCd:0, nextRoll:0, reverse:false, skipMove:false, bonusRoll:0
   }));
 
   // 从中途章节开局：把此前发生过的事件补演一遍，保证热度、政策、等级上限与历史一致
