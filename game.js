@@ -652,7 +652,11 @@ function showTip(el, key){
   showTipHTML(el, policyTip(m));
 }
 function hideTip(){ $("#tip").classList.remove("show"); }
-document.addEventListener("click", hideTip);
+document.addEventListener("click", e => {
+  /* 政策/风险标签的点击用于显示详情，不能被同一次冒泡点击立即关闭。 */
+  if (e.target && e.target.closest && e.target.closest("#policy [data-tip], #legacy [data-tip]")) return;
+  hideTip();
+});
 window.addEventListener("scroll", e => {
   /* 日志会自动滚到底，那个 scroll 不该把提示关掉 */
   if (e && e.target && e.target.id === "log") return;
