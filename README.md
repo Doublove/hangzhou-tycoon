@@ -235,6 +235,19 @@ npm run test:doc    # 重新生成 tests/测试用例.md
 
 ---
 
+## 发布
+
+`github.com:443` 在这台机器上会间歇性 502，`git push` 直接推不通。用 `github-push-fallback` skill 兜底：
+
+```bash
+python ~/.workbuddy-ai/skills/github-push-fallback/scripts/gh_push.py --probe   # 看哪条通道通
+python ~/.workbuddy-ai/skills/github-push-fallback/scripts/gh_push.py           # 先 push，失败自动转 API
+```
+
+它先正常 `git push`，遇到网络层错误就改走 GitHub Git Data API：一次构建 tree + commit + 移动分支指针，而不是逐文件 PUT。永不 force push，远端已前进时直接退出而不是覆盖。
+
+---
+
 ## 已知问题
 
 - **破产率约 4%**（1/24 人次，204 回合战役）。地可以 8 折变现，只要名下有地，任何一次打击都能化解——真正致命的是「没钱 + 没地」同时发生。
