@@ -220,6 +220,7 @@ function renderHUD(){
   if (!active.length){
     const c = document.createElement("span");
     c.className = "chip info"; c.textContent = "政策宽松";
+    c.dataset.tip = "none";
     pol.appendChild(c);
   } else {
     active.forEach(m => {
@@ -227,9 +228,9 @@ function renderHUD(){
       c.className = "chip" + (m.kind === "event" ? " info" : "");
       const rest = m.until == null ? "" : ` · 剩${Math.max(0, m.until - state.absMonth)}月`;
       c.textContent = m.name + rest;
-      c.onmouseenter = () => showTip(c, m.key);
-      c.onmouseleave = hideTip;
-      c.onclick = e => { e.stopPropagation(); showTip(c, m.key); };
+      c.dataset.tip = "policy";
+      c.dataset.key = m.key;
+      c.onclick = e => { e.stopPropagation(); showTipHTML(c, policyTip(m)); };
       pol.appendChild(c);
     });
   }
@@ -241,7 +242,8 @@ function renderHUD(){
     w.className = "chip";
     w.style.cssText = "background:#B3261E;color:#fff";
     w.textContent = `高杠杆 ${Math.round(leverage(meP) * 100)}% · 无上限保护`;
-    w.onclick = e => { e.stopPropagation(); toast("单次过路费不再封顶，先还债或留足现金"); };
+    w.dataset.tip = "leverage";
+    w.onclick = e => { e.stopPropagation(); showTipHTML(w, leverageTip(meP)); };
     pol.appendChild(w);
   }
 
@@ -251,19 +253,46 @@ function renderHUD(){
     w.className = "chip";
     w.style.cssText = "background:#8E2A20;color:#fff";
     w.textContent = `清算中 · 剩 ${Math.max(0, meP.liqDeadline - state.absMonth)} 月`;
-    w.onclick = e => { e.stopPropagation(); toast("还清债务才能退出清算，否则期满出局"); };
+    w.dataset.tip = "liquidation";
+    w.onclick = e => { e.stopPropagation(); showTipHTML(w, liquidationTip(meP)); };
     pol.appendChild(w);
   }
 
-  // 旧环资产
+  /* 事件委托：chip 每次 renderHUD 都会重建，绑在容器上才不会在
+     AI 回合频繁重绘时丢掉 hover 状态 */
+  bindTipDelegate(pol, el => {
+    if (el.dataset.tip === "policy"){
+      const m = activeMod(el.dataset.key);
+      return m ? policyTip(m) : "";
+    }
+    if (el.dataset.tip === "leverage" && meP) return leverageTip(meP);
+    if (el.dataset.tip === "liquidation" && meP) return liquidationTip(meP);
+    return "";
+  });
+
+  // 旧环资产：只显示人类玩家在已沉降环上的持有，悬停看明细
   const legacy = $("#legacy");
   if (legacy){
-    const rows = state.rings.map((r, i) => {
-      const meId = state.players[0] ? state.players[0].charId : null;
-      const n = meId ? r.cells.filter(c => c.t === "plot" && c.owner && c.owner.charId === meId).length : 0;
-      return i === state.chapter ? null : (n ? `${RINGS[i].name.split(" · ")[0]} ${n} 宗` : null);
-    }).filter(Boolean);
-    legacy.textContent = rows.length ? "旧环资产：" + rows.join("　") : "";
+    legacy.innerHTML = "";
+    if (state.started && meP && !meP.bankrupt){
+      state.rings.forEach((r, i) => {
+        if (i === state.chapter) return;
+        const mine = r.cells.filter(c => c.t === "plot" && c.owner && c.owner.id === meP.id);
+        if (!mine.length) return;
+        const c = document.createElement("span");
+        c.className = "chip legacy";
+        c.dataset.tip = "legacy";
+        c.dataset.ring = i;
+        c.textContent = `${RINGS[i].name.split(" · ")[0]} ${mine.length} 宗`;
+        c.onclick = e => { e.stopPropagation(); showTipHTML(c, legacyTip(i, meP)); };
+        legacy.appendChild(c);
+      });
+    }
+    bindTipDelegate(legacy, el => {
+      if (el.dataset.tip !== "legacy") return "";
+      const i = +el.dataset.ring;
+      return meP ? legacyTip(i, meP) : "";
+    });
   }
 
   renderItems();
@@ -300,12 +329,20 @@ function renderSkillBtn(){
   if (!a){ btn.style.display = "none"; return; }
   btn.style.display = "";
   const ready = p.skillCd <= 0 && (p.human ? state.turnIdx === p.id : true) && !state.busy && !state.over;
-  btn.disabled = !ready;
+  /* 不用 disabled：Chrome 下 disabled 按钮不派发 mouseenter，
+     冷却中反而最需要看说明。改用 .off 控制视觉，点击时再判可用性。 */
+  btn.disabled = false;
   btn.classList.toggle("ready", ready);
+  btn.classList.toggle("off", !ready);
   btn.innerHTML = p.skillCd > 0
     ? `${a.name}<small>冷却 ${p.skillCd} 月</small>`
     : `${a.name}<small>${p.human ? "点一下发动" : "AI"}</small>`;
-  btn.onclick = () => { if (ready) useSkill(p); };
+  btn.onmouseenter = () => showTipHTML(btn, skillTip(p, a), "above");
+  btn.onmouseleave = hideTip;
+  btn.onclick = () => {
+    if (ready) useSkill(p);
+    else showTipHTML(btn, skillTip(p, a), "above");   // 触屏没有 hover，点一下也能看说明
+  };
 }
 
 function humanPlayer(){ return state.players.find(x => x.human) || null; }
@@ -511,19 +548,116 @@ function toast(msg){
   toastTimer = setTimeout(() => t.classList.remove("show"), 1600);
 }
 
-function showTip(el, key){
-  const m = state.mods.find(x => x.key === key);
-  if (!m) return;
+/* ---------------- 悬浮提示 ----------------
+   统一走 #tip 这个顶部横条：先写内容，再贴到 HUD 下沿。
+   内容一律由 *Tip() 生成，方便单测直接断言文案。
+----------------------------------------------------- */
+function showTipHTML(el, html, anchor){
+  if (!html) return;
   const tip = $("#tip");
-  const life = m.until == null ? "永久生效" : `剩余 ${Math.max(0, m.until - state.absMonth)} 个月`;
-  tip.innerHTML = `<b>${m.name}</b><div class="t-meta">${monthLabel(m.start)} 起 · ${life}</div>${m.detail}`;
+  tip.innerHTML = html;
   tip.classList.add("show");
-  const bar = $("#hud").getBoundingClientRect();
-  tip.style.top = (bar.bottom + 6) + "px";
+  if (anchor === "above" && el && el.getBoundingClientRect){
+    /* 底部操作栏的按钮，提示贴在自己上方，视线不用来回跳 */
+    const r = el.getBoundingClientRect();
+    const h = tip.offsetHeight || 120;
+    tip.style.top = Math.max(8, r.top - h - 10) + "px";
+  } else {
+    const bar = $("#hud").getBoundingClientRect();
+    tip.style.top = (bar.bottom + 6) + "px";
+  }
+}
+
+/* 同一个 key 可能在 mods 里有多条（政策续期、重复 push），优先取生效中的那条 */
+function activeMod(key){
+  const list = state.mods.filter(m => m.key === key);
+  return list.find(m => m.until == null || state.absMonth < m.until) || list[list.length - 1] || null;
+}
+
+function policyTip(m){
+  const life = m.until == null ? "永久生效" : `剩余 ${Math.max(0, m.until - state.absMonth)} 个月`;
+  return `<b>${m.name}</b><div class="t-meta">${monthLabel(m.start)} 起 · ${life}</div>${m.detail || "政策生效中"}`;
+}
+
+function leverageTip(p){
+  const lev = Math.round(leverage(p) * 100);
+  return `<b>高杠杆 ${lev}%</b>
+    <div class="t-meta">负债 ${fmt(p.debt)} 万 ÷ 净资产 ${fmt(netWorth(p))} 万</div>
+    杠杆率超过 ${CFG.levThreshold * 100}% 后，单次过路费不再享受「净资产 ${CFG.tollCap * 100}%」的上限保护，踩到对手的地要全额支付。`;
+}
+
+function liquidationTip(p){
+  const left = Math.max(0, p.liqDeadline - state.absMonth);
+  return `<b>破产清算中</b>
+    <div class="t-meta">剩余 ${left} 个月 · 债务 ${fmt(p.debt)} 万</div>
+    清算期内仍可行动、仍收租金。${CFG.liqMonths} 个月内还清债务可退出清算；期满仍有欠款则宣告破产出局，名下资产清空。`;
+}
+
+/* 旧环资产：列出该环上属于该玩家的每一宗地，附估值与月租 */
+function legacyTip(ringIdx, p){
+  const ring = state.rings[ringIdx];
+  if (!ring || !p) return "";
+  const mine = ring.cells
+    .filter(c => c.t === "plot" && c.owner && c.owner.id === p.id)
+    .sort((a, b) => value(b) - value(a));
+  if (!mine.length) return "";
+  const total = mine.reduce((s, c) => s + value(c), 0);
+  const rent = mine.reduce((s, c) => s + rentOf(c), 0);
+  const rows = mine.slice(0, 6)
+    .map(c => `<div>${c.name} · Lv${c.lv} · ${fmt(value(c))} 万</div>`)
+    .join("");
+  const more = mine.length > 6 ? `<div>…等 ${mine.length} 宗</div>` : "";
+  return `<b>${ring.name} · 旧环资产</b>
+    <div class="t-meta">${mine.length} 宗 · 估值 ${fmt(total)} 万 · 月租 ${fmt(rent)} 万</div>
+    ${rows}${more}
+    <div class="t-meta" style="margin-top:5px">旧环只保留持有与收租，不能再买入；可被「旧城改造」升级或征收。</div>`;
+}
+
+/* 主动技能说明：名称、冷却、当前状态、效果，以及角色的被动 */
+function skillTip(p, a){
+  if (!p || !a) return "";
+  const ch = CHARS.find(c => c.id === p.charId) || {};
+  let now;
+  if (p.skillCd > 0) now = `冷却中，剩 ${p.skillCd} 个月`;
+  else if (p.human && state.turnIdx !== p.id) now = "等你的回合";
+  else if (state.busy) now = "行动中";
+  else now = "可用";
+  const passive = ch.skill
+    ? `<div class="t-meta" style="margin-top:5px">被动 · ${ch.skill.split("：")[0]}</div>${ch.skill.split("：").slice(1).join("：")}`
+    : "";
+  return `<b>${a.name}</b>
+    <div class="t-meta">主动技能 · 冷却 ${a.cd} 个月 · ${now}</div>
+    ${a.desc}${passive}`;
+}
+
+/* 事件委托：容器上挂一次，内部 chip 重建也不影响 hover */
+function bindTipDelegate(container, resolver){
+  if (!container) return;
+  container.onmouseover = e => {
+    const el = e.target && e.target.closest ? e.target.closest("[data-tip]") : null;
+    if (!el || !container.contains(el)) return;
+    showTipHTML(el, resolver(el));
+  };
+  container.onmouseout = e => {
+    const el = e.target && e.target.closest ? e.target.closest("[data-tip]") : null;
+    if (!el) return;
+    if (e.relatedTarget && el.contains(e.relatedTarget)) return;
+    hideTip();
+  };
+}
+
+function showTip(el, key){
+  const m = activeMod(key);
+  if (!m) return;
+  showTipHTML(el, policyTip(m));
 }
 function hideTip(){ $("#tip").classList.remove("show"); }
 document.addEventListener("click", hideTip);
-window.addEventListener("scroll", hideTip, true);
+window.addEventListener("scroll", e => {
+  /* 日志会自动滚到底，那个 scroll 不该把提示关掉 */
+  if (e && e.target && e.target.id === "log") return;
+  hideTip();
+}, true);
 window.addEventListener("resize", () => { if (state.started) renderChains(); });
 
 /* ---------------- 弹窗 ---------------- */
@@ -1590,9 +1724,11 @@ function nextChapter(){
     if (p.bankrupt) return;          // 已出局者不复活：复活后无地无收入，下章必死
     const plots = owned(p).sort((a, b) => value(b) - value(a));
     const keep = plots[0];
+    const keepLv = keep ? keep.lv : 0;
     const cash = Math.max(0, Math.round(netWorth(p) * CFG.inheritRate));
     allCells().forEach(c => { if (c.t === "plot" && c.owner === p) { c.owner = null; c.lv = 0; c.broken = false; c.boost = 0; } });
-    if (keep){ keep.owner = p; keep.lv = Math.max(1, keep.lv); keep.boughtAt = state.absMonth; }
+    /* keep.lv 必须在清空之后再写回，否则读到的是刚被清零的 0 */
+    if (keep){ keep.owner = p; keep.lv = Math.max(1, keepLv); keep.boughtAt = state.absMonth; }
     p.cash = cash; p.debt = 0; p.pos = 0; p.bankrupt = false;
     p.stock = 0; p.bridge = 0; p.revalue = 1;
     p.inJail = false; p.jailFail = 0; p.scenicTurns = 0; p.scenicName = "";

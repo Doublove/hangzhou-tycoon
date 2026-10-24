@@ -4,7 +4,7 @@
 
 **在线试玩：** https://doublove.github.io/hangzhou-tycoon/
 **仓库：** https://github.com/Doublove/hangzhou-tycoon
-**当前版本：** v1.6 ｜ 变更记录见 [CHANGELOG.md](./CHANGELOG.md)
+**当前版本：** v1.6.1 ｜ 变更记录见 [CHANGELOG.md](./CHANGELOG.md)
 
 ---
 
@@ -207,7 +207,7 @@ python -m http.server 8080
 
 ## 自动化测试
 
-205 条用例覆盖地图、经济、回合、事件卡牌、道具、技能、破产、存档与整局不变量。测试直接加载 `data.js` / `game.js` 本体，不维护第二份逻辑。
+228 条用例覆盖地图、经济、回合、事件卡牌、道具、技能、破产、存档、悬浮说明与整局不变量。测试直接加载 `data.js` / `game.js` 本体，不维护第二份逻辑。
 
 ```bash
 npm test            # 全部用例，约 16 秒
@@ -228,6 +228,7 @@ npm run test:doc    # 重新生成 tests/测试用例.md
 | 角色技能 | 19 | `tests/skills.test.js` |
 | 破产与清算 | 14 | `tests/bankrupt.test.js` |
 | 存档与读档 | 12 | `tests/save.test.js` |
+| HUD 悬浮说明 | 23 | `tests/tooltip.test.js` |
 | 整局不变量 | 10 | `tests/balance.test.js` |
 
 完整用例清单与需求追溯见 [`tests/测试用例.md`](./tests/测试用例.md)。

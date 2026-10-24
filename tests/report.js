@@ -20,6 +20,7 @@ const MODULES = [
   { prefix: 'SKILL', file: 'skills.test.js',   name: '角色技能' },
   { prefix: 'BANK',  file: 'bankrupt.test.js', name: '破产与清算' },
   { prefix: 'SAVE',  file: 'save.test.js',     name: '存档与读档' },
+  { prefix: 'TIP',   file: 'tooltip.test.js',  name: 'HUD 悬浮说明' },
   { prefix: 'BAL',   file: 'balance.test.js',  name: '整局不变量' },
 ];
 
@@ -53,6 +54,7 @@ const MATRIX = [
   ['8.5 破产与接管',     '清算两级路径、3 个月宽限', 'TC-BANK-01~14'],
   ['8.7 资金流向平衡',   '系统注入不失控', 'TC-BAL-09'],
   ['10.4 账号与存档',    '版本号、往返一致、坏档容错', 'TC-SAVE-01~12'],
+  ['9.2 / 9.4 界面与交互', '政策条、旧环资产、技能按钮的悬浮说明', 'TC-TIP-01~23'],
 ];
 
 function extract() {
@@ -105,7 +107,7 @@ function render(mods) {
   lines.push('| 模块 | 用例数 | 自动化文件 |');
   lines.push('| --- | ---: | --- |');
   mods.forEach(m => lines.push(`| ${m.name} | ${m.cases.length} | \`tests/${m.file}\` |`));
-  lines.push(`| **合计** | **${total}** | 9 个文件 |`);
+  lines.push(`| **合计** | **${total}** | ${mods.length} 个文件 |`);
   lines.push('');
   lines.push('## 三、需求覆盖矩阵');
   lines.push('');

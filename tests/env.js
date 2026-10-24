@@ -37,13 +37,14 @@ function createElement(tag = 'div') {
     children: [],
     dataset: {},
     attrs: {},
-    innerHTML: '',
     textContent: '',
     disabled: false,
     onclick: null,
     parentNode: null,
     clientWidth: 400,
     clientHeight: 400,
+    offsetHeight: 0,
+    offsetWidth: 0,
     scrollTop: 0,
     scrollHeight: 400,
     style: createStyle(),
@@ -78,10 +79,44 @@ function createElement(tag = 'div') {
       return el._q.get(sel);
     },
     querySelectorAll() { return []; },
+    contains(node) {
+      if (node === el) return true;
+      return el.children.some(c => c === node || (typeof c.contains === 'function' && c.contains(node)));
+    },
+    matches(sel) {
+      if (sel.startsWith('.')) return el.classList.contains(sel.slice(1));
+      if (sel.startsWith('#')) return el.attrs.id === sel.slice(1) || el.id === sel.slice(1);
+      if (sel.startsWith('[')) {
+        const raw = sel.slice(1, -1).split('=')[0];                 // data-tip
+        const key = raw.replace(/^data-/, '').replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+        return el.dataset[key] !== undefined || el.attrs[raw] !== undefined;
+      }
+      return el.tagName === sel.toUpperCase();
+    },
+    closest(sel) {
+      let node = el;
+      while (node) {
+        if (typeof node.matches === 'function' && node.matches(sel)) return node;
+        node = node.parentNode;
+      }
+      return null;
+    },
     get firstChild() { return el.children[0] || null; },
     get lastChild() { return el.children[el.children.length - 1] || null; },
     get childElementCount() { return el.children.length; },
   };
+
+  let html = '';
+  Object.defineProperty(el, 'innerHTML', {
+    get() { return html; },
+    set(v) {
+      html = String(v);
+      /* 真实 DOM 赋空字符串会清空子节点，这里保持一致，
+         否则多次 renderHUD 会累积出重复的 chip */
+      if (html === '') el.children.length = 0;
+    },
+    configurable: true,
+  });
 
   Object.defineProperty(el, 'className', {
     get() { return [...cls].join(' '); },
@@ -163,6 +198,8 @@ const EXPORTS = [
   'aiUseItems', 'boostByBao', 'cellAhead', 'tollAhead', 'humanPlayer',
   'serialize', 'restore', 'saveTo', 'loadFrom', 'newGame', 'startScreen', 'log', 'logSep',
   'stockLot', 'onItemClick', 'showCell', 'closeSheet', 'render',
+  'renderHUD', 'renderSkillBtn', 'renderItems',
+  'showTip', 'showTipHTML', 'hideTip', 'activeMod', 'policyTip', 'legacyTip', 'skillTip',
 ];
 
 function createEnv(options = {}) {

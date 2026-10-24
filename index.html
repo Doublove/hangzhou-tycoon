@@ -45,7 +45,9 @@
   #policy{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
   .chip{font-size:9px;padding:2px 6px;border-radius:6px;background:#FDE7E4;color:var(--red);font-weight:700;cursor:pointer}
   .chip.info{background:#E6F0EC;color:var(--teal)}
-  #legacy{font-size:9px;color:var(--ink-soft);margin-top:5px;min-height:11px}
+  #legacy{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px;min-height:11px}
+  .chip.legacy{background:#EDE7DC;color:#6B6156}
+  .chip.legacy:hover{background:#E2D9C8}
 
   /* 棋盘 */
   #boardWrap{position:relative;width:100%;aspect-ratio:1/1;background:#fff;
@@ -123,7 +125,8 @@
     box-shadow:0 3px 0 var(--line);line-height:1.2;padding:4px 2px}
   #skill small{display:block;font-size:8.5px;font-weight:400;color:#9A9184}
   #skill.ready{background:#FFF4D6;border-color:var(--gold);color:#7A5C00;box-shadow:0 3px 0 #9E7F14}
-  #skill:disabled{opacity:.5;cursor:not-allowed}
+  #skill:hover{border-color:var(--gold)}
+  #skill.off{opacity:.55;cursor:not-allowed}
   #roll{flex:1;padding:12px;border:none;border-radius:13px;background:var(--teal);color:#fff;
         font-size:16px;font-weight:700;letter-spacing:2px;cursor:pointer;box-shadow:0 3px 0 #1F5A50;
         transition:transform .06s}
@@ -202,6 +205,7 @@
   #tip.show{opacity:1}
   #tip b{display:block;font-size:12.5px;margin-bottom:2px}
   #tip .t-meta{color:#C9BFAE;font-size:10.5px;margin-bottom:5px}
+  #tip div{white-space:normal}
 
   #foot{text-align:center;font-size:10px;color:#9A9184;line-height:1.6;padding:2px 0 6px}
   #foot a{color:#9A9184;text-decoration:none;border-bottom:1px dotted #C4BCAC;margin:0 3px}
