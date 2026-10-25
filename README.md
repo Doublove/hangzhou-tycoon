@@ -253,6 +253,8 @@ python ~/.workbuddy-ai/skills/github-push-fallback/scripts/gh_push.py           
 
 它先正常 `git push`，遇到网络层错误就改走 GitHub Git Data API：一次构建 tree + commit + 移动分支指针，而不是逐文件 PUT。永不 force push，远端已前进时直接退出而不是覆盖。
 
+走 API 时提交是远端新建的（sha 与本地不同），脚本会在推送后自动 `git fetch` 并把本地分支对齐到远端提交——内容一字不差，只是 sha 统一。否则下一次提交会继续长在旧根上，形成「内容相同、sha 不同」的平行历史。
+
 ---
 
 ## 已知问题
