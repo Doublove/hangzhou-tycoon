@@ -143,14 +143,14 @@ test('TC-ITEM-11 没有道具时使用失败，且不改变状态', () => {
 test('TC-ITEM-12 遥控骰子指定点数并生效', async () => {
   const env = F.boot();
   const p = env.state.players[0];
-  env.put(p, 24);
+  env.put(p, 23);
   p.items.dice = 1;
   assert.equal(env.useDiceItem(p, 4), true);
   assert.equal(p.nextRoll, 4);
   assert.equal(p.items.dice, 0);
   env.setRandom([0.999]);            // 自然掷骰会被指定值覆盖
   await env.takeTurn();
-  assert.equal(p.pos, (24 + 4) % 26);
+  assert.equal(p.pos, (23 + 4) % env.curCells().length);
   assert.equal(p.nextRoll, 0, '用后即清');
 });
 
@@ -162,7 +162,7 @@ test('TC-ITEM-13 遥控骰子在监狱里可指定偶数越狱', async () => {
   env.useDiceItem(p, 6);
   await env.takeTurn();
   assert.equal(p.inJail, false);
-  assert.equal(p.pos, (jailIdx + 6) % 26);
+  assert.equal(p.pos, (jailIdx + 6) % env.curCells().length);
 });
 
 test('TC-ITEM-14 停留卡设置本回合不动', () => {

@@ -65,7 +65,7 @@ test('TC-BAL-02 结束后没有 NaN / Infinity', () => {
 
 test('TC-BAL-03 所有棋子位置都在棋盘范围内', () => {
   snap.env.state.players.forEach(p => {
-    assert.ok(p.pos >= 0 && p.pos < 26, `${p.name} 位置越界：${p.pos}`);
+    assert.ok(p.pos >= 0 && p.pos < 25, `${p.name} 位置越界：${p.pos}`);
     assert.ok(Number.isInteger(p.pos));
   });
 });

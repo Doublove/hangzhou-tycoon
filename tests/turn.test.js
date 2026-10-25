@@ -16,11 +16,11 @@ test('TC-TURN-01 单骰点数为 1—6，不会出现 0 或 7', async () => {
   // 覆盖 rnd 的上下边界：Math.random 0 → 1 点，0.999 → 6 点
   const samples = [[0, 1], [0.999, 6], [0.5, 4]];
   for (const [r, expected] of samples) {
-    env.put(p, 24);                       // 落点依次为 25 证券 / 4 地块 / 2 地块，均无随机卡牌
+    env.put(p, 23);                       // 落点依次为 24 风景区 / 4 地块 / 2 地块，均无随机卡牌
     p.scenicTurns = 0;
     env.setRandom([r]);
     await env.takeTurn();
-    assert.equal(p.pos, (24 + expected) % 26, `随机数 ${r} 应走 ${expected} 步`);
+    assert.equal(p.pos, (23 + expected) % env.curCells().length, `随机数 ${r} 应走 ${expected} 步`);
     assert.ok(expected >= 1 && expected <= 6);
   }
 });
@@ -39,7 +39,7 @@ test('TC-TURN-02 掷 1 点前进 1 格', async () => {
 test('TC-TURN-03 经过起点：月供 1 万 + 当前现金 3%', async () => {
   const env = F.boot();
   const p = env.state.players[0];
-  env.put(p, 20);              // 20 + 6 = 26 → 回到起点
+  env.put(p, 19);              // 19 + 6 = 25 → 回到起点
   p.cash = 1000;
   env.setRandom([0.999]);      // 6 点
   await env.takeTurn();
@@ -140,7 +140,7 @@ test('TC-TURN-11 监狱掷偶数出狱，并按点数前进', async () => {
   await env.takeTurn();
   assert.equal(p.inJail, false);
   assert.equal(p.jailFail, 0);
-  assert.equal(p.pos, (jailIdx + 2) % 26);
+  assert.equal(p.pos, (jailIdx + 2) % env.curCells().length);
 });
 
 test('TC-TURN-12 连续 3 次奇数后，第 4 回合强制出狱', async () => {
@@ -152,7 +152,7 @@ test('TC-TURN-12 连续 3 次奇数后，第 4 回合强制出狱', async () => 
   env.setRandom([0]);          // 仍掷 1 点（奇数），但关押期满
   await env.takeTurn();
   assert.equal(p.inJail, false);
-  assert.equal(p.pos, (jailIdx + 1) % 26);
+  assert.equal(p.pos, (jailIdx + 1) % env.curCells().length);
 });
 
 test('TC-TURN-13 踩中监狱格直接进监狱', async () => {
