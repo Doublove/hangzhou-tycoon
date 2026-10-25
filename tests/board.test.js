@@ -37,9 +37,9 @@ test('TC-MAP-02 每环 26 格（起点 1 + 地块 16 + 功能格 9）', () => {
   });
 });
 
-test('TC-MAP-03 功能格构成：机会2 命运1 道具店1 银行1 税务1 证券1 监狱1 风景区1', () => {
+test('TC-MAP-03 功能格构成：机会2 命运1 道具店1 银行1 证券2 监狱1 风景区1', () => {
   const env = F.boot();
-  const expected = { chance: 2, fate: 1, shop: 1, bank: 1, tax: 1, stock: 1, jail: 1, scenic: 1 };
+  const expected = { chance: 2, fate: 1, shop: 1, bank: 1, stock: 2, jail: 1, scenic: 1 };
   env.state.rings.forEach((ring, i) => {
     const count = t => ring.cells.filter(c => c.t === t).length;
     Object.entries(expected).forEach(([t, n]) => {
@@ -193,5 +193,14 @@ test('TC-MAP-18 15 号格是道具店，且每环唯一', () => {
     assert.equal(ring.cells[15].t, 'shop', `第 ${i} 环 15 号格应为道具店`);
     assert.equal(ring.cells[15].name, '道具店');
     assert.equal(ring.cells.filter(c => c.t === 'shop').length, 1);
+  });
+});
+
+test('TC-MAP-19 税务格已移除，12 号与 25 号都是证券', () => {
+  const env = F.boot();
+  env.state.rings.forEach((ring, i) => {
+    assert.equal(ring.cells.filter(c => c.t === 'tax').length, 0, `第 ${i} 环不应再有税务格`);
+    assert.equal(ring.cells[12].t, 'stock', `第 ${i} 环 12 号应为证券`);
+    assert.equal(ring.cells[25].t, 'stock', `第 ${i} 环 25 号应为证券`);
   });
 });

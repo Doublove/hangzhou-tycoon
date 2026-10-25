@@ -56,19 +56,12 @@ test('TC-ITEM-04 落在机会格有 35% 概率额外掉一件道具', async () =
   assert.equal(total(), after, '未命中概率不应掉落');
 });
 
-test('TC-ITEM-05 税务格 13% 概率掉停留卡', async () => {
+test('TC-ITEM-05 税务格已移除，停留卡只剩机会格与道具店两条渠道', () => {
   const env = F.boot();
-  const p = env.state.players[0];
-  const tax = env.curCells().find(c => c.t === 'tax');
-  p.items.stay = 0;
-  env.setRandom([0]);
-  await env.landOn(p, tax);
-  assert.equal(p.items.stay, 1);
-
-  p.items.stay = 0;
-  env.setRandom([0.5]);
-  await env.landOn(p, tax);
-  assert.equal(p.items.stay, 0);
+  const cells = env.curCells();
+  assert.equal(cells.filter(c => c.t === 'tax').length, 0, '棋盘上不应再有税务格');
+  assert.ok(cells.some(c => c.t === 'chance'), '机会格仍在');
+  assert.ok(cells.some(c => c.t === 'shop'), '道具店仍在');
 });
 
 test('TC-ITEM-06 买入指数时 13% 概率掉掉头卡', async () => {

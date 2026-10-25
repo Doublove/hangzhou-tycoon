@@ -16,7 +16,6 @@ const CFG = {
   items: {
     start: { dice:3, stay:1, uturn:1, block:1 },  // 初始道具
     chanceDrop: 0.35,                             // 落在机会格时额外掉一件随机道具
-    taxStay: 0.13,                                // 税务格掉停留卡
     stockUturn: 0.13,                             // 买入指数掉掉头卡
     jailBlock: 0.05                               // 进监狱掉路障
   },
@@ -28,8 +27,7 @@ const CFG = {
   loanCap: 0.6,                     // 贷款上限 = 净资产 × 60%
   loanCapTight: 0.4,                // 限贷期 40%
   loanStep: 200,                    // 单次借款上限
-  inheritRate: 0.4,                 // 章节继承比例
-  taxRate: 0.012                    // 税务格：净资产 × 1.2%
+  inheritRate: 0.4                  // 章节继承比例
 };
 
 // 时代系数：还原 2010—2026 的大周期
@@ -203,7 +201,7 @@ const RINGS = [
 // 每环的格位排列：起点 1 + 地块 16 + 功能格 9（V1.1 新增监狱、风景区）
 const TRACK_PATTERN = [
   "start","p0","p1","chance","p2","p3","fate","p4","p5",
-  "jail","p6","p7","tax","p8","p9","shop","p10","p11",
+  "jail","p6","p7","stock","p8","p9","shop","p10","p11",
   "bank","p12","p13","chance","p14","p15","scenic","stock"
 ];
 

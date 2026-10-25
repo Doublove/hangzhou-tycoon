@@ -387,17 +387,6 @@ test('TC-ECO-35 贷款利率应为 0.6%/月', { todo: '代码对所有角色统�
   assert.ok(Math.abs(env.loanRate() - 0.006) < 1e-9, `实际 ${env.loanRate()}`);
 });
 
-test('TC-ECO-36 税务格应按持有套数累进征税', { todo: '代码按净资产 × 1.2% 单一税率，未实现累进' }, () => {
-  const env = F.boot();
-  const p = env.state.players[0];
-  for (let i = 1; i <= 4; i++) env.grant(p, env.at(i), 1);
-  const taxCell = env.curCells().find(c => c.t === 'tax');
-  const before = p.cash;
-  env.landOn(p, taxCell);
-  const paid = before - p.cash;
-  assert.ok(paid > Math.round(env.netWorth(p) * 0.012), '4 套应触发累进税率');
-});
-
 test('TC-ECO-37 热度应每回合向基准值自然回归 3%', { todo: '代码未实现热度自然回归' }, async () => {
   const env = F.boot();
   const base = env.REGIONS['城北'].heat;

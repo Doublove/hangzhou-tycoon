@@ -102,7 +102,7 @@ function buildRings(){
         const sc = SCENIC[ri] || SCENIC[0];
         return { t:"scenic", name:sc.short, fullName:sc.full, ring:ri, idx };
       }
-      const label = { chance:"机会", fate:"命运", bank:"银行", tax:"税务", stock:"证券", shop:"道具店" }[token];
+      const label = { chance:"机会", fate:"命运", bank:"银行", stock:"证券", shop:"道具店" }[token];
       return { t:token, name:label, ring:ri, idx };
     });
     return { cells, name:ring.name, years:ring.years };
@@ -934,8 +934,6 @@ function showCell(c){
         <div class="kv"><span>你当前的价格</span><b>${fmt(price)} 万 / 件</b></div>
         ${ITEM_KEYS.map(k => `<div class="kv"><span>${ITEMS[k].icon} ${ITEMS[k].name}</span><b>持有 ${p ? itemCount(p, k) : 0}</b></div>`).join("")}
         <p class="sub" style="margin-top:8px">越有钱，道具越贵。</p>`;
-    } else if (c.t === "tax"){
-      body = `<p class="sub">每次经过按净资产 <b>1.2%</b> 缴税。</p>`;
     } else if (c.t === "stock"){
       body = `<p class="sub">买入或卖出「杭州楼市指数」，每手 100 股，价格随行情波动。</p>
         <div class="kv"><span>当前指数</span><b>${fmt(state.stockPrice)} 点</b></div>`;
@@ -1461,13 +1459,6 @@ async function landOn(p, c){
     return;
   }
 
-  if (c.t === "tax"){
-    const t = Math.round(netWorth(p) * CFG.taxRate);
-    p.cash -= t;
-    log(`<b>${p.name}</b> 缴税 <b>-${fmt(t)}</b> 万`, "bad");
-    dropItem(p, "stay", CFG.items.taxStay, "税务局");
-    renderHUD(); return;
-  }
 }
 
 /* 风景区停留回合：1 回合 50%、2 回合 25%……6 回合 1% */
