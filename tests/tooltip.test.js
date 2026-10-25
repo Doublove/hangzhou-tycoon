@@ -75,14 +75,17 @@ test('TC-TIP-05 同 key 有多条记录时，取生效中的那条', () => {
   assert.doesNotMatch(tipText(env), /旧限购/);
 });
 
-test('TC-TIP-06 没有生效政策时显示「政策宽松」，且不弹提示', () => {
+test('TC-TIP-06 没有生效政策时显示「政策宽松」，悬停给出解释', () => {
   const env = F.boot();
   env.renderHUD();
   const pol = env.document.querySelector('#policy');
   assert.equal(pol.children.length, 1);
   assert.equal(pol.children[0].textContent, '政策宽松');
   hover(pol, pol.children[0]);
-  assert.equal(shown(env), false, '占位 chip 不应弹出空提示');
+  assert.equal(shown(env), true, '占位 chip 也要有反馈，否则用户以为坏了');
+  assert.match(tipText(env), /政策宽松/);
+  assert.match(tipText(env), /没有生效的政策/);
+  assert.match(tipText(env), /按月自动触发/);
 });
 
 test('TC-TIP-07 悬停高杠杆 chip 显示杠杆率与豁免规则', () => {
@@ -278,9 +281,10 @@ test('TC-TIP-22 chip 被重绘替换后，悬停仍然有效（事件委托）',
   env.renderHUD();
   const pol = env.document.querySelector('#policy');
   const before = pol.children[0];
+  env.setMonth(5);                     // 剩余月数变化，触发重建
   env.renderHUD();
   const after = pol.children[0];
-  assert.notEqual(before, after, '重绘应产生新节点');
+  assert.notEqual(before, after, '内容变化应产生新节点');
   hover(pol, after);
   assert.equal(shown(env), true, '委托监听在容器上，换节点也能响应');
   assert.match(tipText(env), /限购令落地/);
@@ -294,4 +298,39 @@ test('TC-TIP-23 点击 chip 同样能看详情（触屏兜底）', () => {
   pol.children[0].onclick({ stopPropagation() {} });
   assert.equal(shown(env), true);
   assert.match(tipText(env), /限购令落地/);
+});
+
+test('TC-TIP-24 内容没变时不重建节点，避免打断悬停', () => {
+  const env = F.boot();
+  env.setPolicy('limitBuy', 30);
+  env.renderHUD();
+  const pol = env.document.querySelector('#policy');
+  const first = pol.children[0];
+  env.renderHUD();
+  env.renderHUD();
+  assert.equal(pol.children[0], first, '同一节点应被复用，AI 回合重绘才不会闪');
+
+  env.setMonth(5);                     // 剩余月数变了，才需要重建
+  env.renderHUD();
+  assert.notEqual(pol.children[0], first);
+  assert.match(pol.children[0].textContent, /剩25月/);
+});
+
+test('TC-TIP-25 进入第二章却没有旧环资产时，显示占位并说明', () => {
+  const env = F.boot();
+  env.nextChapter();                   // 一块地都没有
+  env.renderHUD();
+  const legacy = env.document.querySelector('#legacy');
+  assert.equal(legacy.children.length, 1);
+  assert.match(legacy.children[0].textContent, /暂无/);
+  hover(legacy, legacy.children[0]);
+  assert.equal(shown(env), true);
+  assert.match(tipText(env), /旧环资产/);
+  assert.match(tipText(env), /沉降/);
+});
+
+test('TC-TIP-26 第一章不显示旧环占位（概念还没出现）', () => {
+  const env = F.boot();
+  env.renderHUD();
+  assert.equal(env.document.querySelector('#legacy').children.length, 0);
 });

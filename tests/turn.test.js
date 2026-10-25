@@ -523,3 +523,16 @@ test('TC-TURN-44 AI 现金安全线随难度变化：困难 < 普通 < 简单', 
   assert.ok(needs[0] > needs[1], '简单难度应留更多现金');
   assert.ok(needs[1] > needs[2], '普通应比困难保守');
 });
+
+test('TC-TURN-45 开局日志的进场金额按时代系数缩放，不用角色基准值', () => {
+  const { createEnv } = require('./env');
+  const env = createEnv();
+  env.newGame('hang', 'normal', 3);        // 2022 年开局，时代系数 1.86
+  const p = env.state.players[0];
+  const text = env.logText();
+  const m = text.match(/带着 ([\d,]+) 万进场/);
+  assert.ok(m, `日志里没找到进场金额：${text.slice(0, 120)}`);
+  assert.equal(Number(m[1].replace(/,/g, '')), p.cash, '日志金额应等于玩家实际现金');
+  assert.notEqual(p.cash, 960, '第四章起始资金应随时代系数放大');
+  assert.equal(p.cash, Math.round(960 * 1.86));
+});

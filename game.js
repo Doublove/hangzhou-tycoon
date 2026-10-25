@@ -189,6 +189,9 @@ function triggerStall(){
 }
 
 /* ---------------- 渲染 ---------------- */
+let policySig = "";
+let legacySig = "";
+
 function render(){
   renderHUD(); renderBoard(); renderTokens();
 }
@@ -215,52 +218,70 @@ function renderHUD(){
 
   // 政策条
   const pol = $("#policy");
-  pol.innerHTML = "";
-  const active = state.mods.filter(m => m.until == null || state.absMonth < m.until);
-  if (!active.length){
-    const c = document.createElement("span");
-    c.className = "chip info"; c.textContent = "政策宽松";
-    c.dataset.tip = "none";
-    pol.appendChild(c);
-  } else {
-    active.forEach(m => {
-      const c = document.createElement("span");
-      c.className = "chip" + (m.kind === "event" ? " info" : "");
-      const rest = m.until == null ? "" : ` · 剩${Math.max(0, m.until - state.absMonth)}月`;
-      c.textContent = m.name + rest;
-      c.dataset.tip = "policy";
-      c.dataset.key = m.key;
-      c.onclick = e => { e.stopPropagation(); showTipHTML(c, policyTip(m)); };
-      pol.appendChild(c);
-    });
-  }
-
-  // 高杠杆警示：超过阈值就不再享受单次上限保护
   const meP = state.players[0];
-  if (state.started && meP && !meP.bankrupt && !cappedFor(meP)){
-    const w = document.createElement("span");
-    w.className = "chip";
-    w.style.cssText = "background:#B3261E;color:#fff";
-    w.textContent = `高杠杆 ${Math.round(leverage(meP) * 100)}% · 无上限保护`;
-    w.dataset.tip = "leverage";
-    w.onclick = e => { e.stopPropagation(); showTipHTML(w, leverageTip(meP)); };
-    pol.appendChild(w);
+  const active = state.mods.filter(m => m.until == null || state.absMonth < m.until);
+  const highLev = state.started && meP && !meP.bankrupt && !cappedFor(meP);
+  const liquidating = state.started && meP && !meP.bankrupt && meP.liquidating;
+
+  /* 内容没变就不重建节点。AI 回合每 0.3 秒调一次 renderHUD，
+     反复销毁重建会让鼠标下的 chip 不断被替换，悬停提示跟着闪。 */
+  const polSig = [
+    active.map(m => `${m.name}·${m.until == null ? "永久" : Math.max(0, m.until - state.absMonth)}`).join("|"),
+    highLev ? Math.round(leverage(meP) * 100) : "",
+    liquidating ? Math.max(0, meP.liqDeadline - state.absMonth) : "",
+  ].join("#");
+
+  if (polSig !== policySig){
+    policySig = polSig;
+    pol.innerHTML = "";
+    if (!active.length){
+      const c = document.createElement("span");
+      c.className = "chip info"; c.textContent = "政策宽松";
+      c.dataset.tip = "none";
+      pol.appendChild(c);
+    } else {
+      active.forEach(m => {
+        const c = document.createElement("span");
+        c.className = "chip" + (m.kind === "event" ? " info" : "");
+        const rest = m.until == null ? "" : ` · 剩${Math.max(0, m.until - state.absMonth)}月`;
+        c.textContent = m.name + rest;
+        c.dataset.tip = "policy";
+        c.dataset.key = m.key;
+        c.onclick = e => { e.stopPropagation(); showTipHTML(c, policyTip(m)); };
+        pol.appendChild(c);
+      });
+    }
+
+    // 高杠杆警示：超过阈值就不再享受单次上限保护
+    if (highLev){
+      const w = document.createElement("span");
+      w.className = "chip";
+      w.style.cssText = "background:#B3261E;color:#fff";
+      w.textContent = `高杠杆 ${Math.round(leverage(meP) * 100)}% · 无上限保护`;
+      w.dataset.tip = "leverage";
+      w.onclick = e => { e.stopPropagation(); showTipHTML(w, leverageTip(meP)); };
+      pol.appendChild(w);
+    }
+
+    // 清算警示
+    if (liquidating){
+      const w = document.createElement("span");
+      w.className = "chip";
+      w.style.cssText = "background:#8E2A20;color:#fff";
+      w.textContent = `清算中 · 剩 ${Math.max(0, meP.liqDeadline - state.absMonth)} 月`;
+      w.dataset.tip = "liquidation";
+      w.onclick = e => { e.stopPropagation(); showTipHTML(w, liquidationTip(meP)); };
+      pol.appendChild(w);
+    }
   }
 
-  // 清算警示
-  if (state.started && meP && !meP.bankrupt && meP.liquidating){
-    const w = document.createElement("span");
-    w.className = "chip";
-    w.style.cssText = "background:#8E2A20;color:#fff";
-    w.textContent = `清算中 · 剩 ${Math.max(0, meP.liqDeadline - state.absMonth)} 月`;
-    w.dataset.tip = "liquidation";
-    w.onclick = e => { e.stopPropagation(); showTipHTML(w, liquidationTip(meP)); };
-    pol.appendChild(w);
-  }
-
-  /* 事件委托：chip 每次 renderHUD 都会重建，绑在容器上才不会在
-     AI 回合频繁重绘时丢掉 hover 状态 */
+  /* 事件委托：chip 被重建也不影响 hover */
   bindTipDelegate(pol, el => {
+    if (el.dataset.tip === "none"){
+      return `<b>政策宽松</b>
+        <div class="t-meta">当前没有生效的政策或事件</div>
+        历史事件会按月自动触发，触发后这里会变成政策标签，悬停可查看详情与剩余月数。`;
+    }
     if (el.dataset.tip === "policy"){
       const m = activeMod(el.dataset.key);
       return m ? policyTip(m) : "";
@@ -273,22 +294,42 @@ function renderHUD(){
   // 旧环资产：只显示人类玩家在已沉降环上的持有，悬停看明细
   const legacy = $("#legacy");
   if (legacy){
-    legacy.innerHTML = "";
+    const groups = [];
     if (state.started && meP && !meP.bankrupt){
       state.rings.forEach((r, i) => {
         if (i === state.chapter) return;
         const mine = r.cells.filter(c => c.t === "plot" && c.owner && c.owner.id === meP.id);
-        if (!mine.length) return;
+        if (mine.length) groups.push({ ring: i, count: mine.length });
+      });
+    }
+    const legSig = groups.map(g => `${g.ring}:${g.count}`).join("|") + "@" + state.chapter;
+    if (legSig !== legacySig){
+      legacySig = legSig;
+      legacy.innerHTML = "";
+      groups.forEach(g => {
         const c = document.createElement("span");
         c.className = "chip legacy";
         c.dataset.tip = "legacy";
-        c.dataset.ring = i;
-        c.textContent = `${RINGS[i].name.split(" · ")[0]} ${mine.length} 宗`;
-        c.onclick = e => { e.stopPropagation(); showTipHTML(c, legacyTip(i, meP)); };
+        c.dataset.ring = g.ring;
+        c.textContent = `${RINGS[g.ring].name.split(" · ")[0]} ${g.count} 宗`;
+        c.onclick = e => { e.stopPropagation(); showTipHTML(c, legacyTip(g.ring, meP)); };
         legacy.appendChild(c);
       });
+      // 已经过了第一章却没有任何旧环资产：给个占位，免得这一栏空着让人以为坏了
+      if (!groups.length && state.chapter > 0 && state.started && meP && !meP.bankrupt){
+        const c = document.createElement("span");
+        c.className = "chip legacy empty";
+        c.dataset.tip = "legacy-empty";
+        c.textContent = "旧环 · 暂无";
+        legacy.appendChild(c);
+      }
     }
     bindTipDelegate(legacy, el => {
+      if (el.dataset.tip === "legacy-empty"){
+        return `<b>旧环资产</b>
+          <div class="t-meta">暂无</div>
+          进入新章节后，上一章持有的地块会沉降为「旧环资产」，只保留持有与收租，不能再买入。`;
+      }
       if (el.dataset.tip !== "legacy") return "";
       const i = +el.dataset.ring;
       return meP ? legacyTip(i, meP) : "";
@@ -1917,7 +1958,7 @@ function newGame(charId, diff, chapter){
 
   render();
   $("#log").innerHTML = "";
-  log(`<b>${curCh().name}</b> 开始。${monthLabel(state.absMonth)}，${me.name} 带着 ${me.cash} 万进场。`, "sys");
+  log(`<b>${curCh().name}</b> 开始。${monthLabel(state.absMonth)}，${me.name} 带着 ${fmt(state.players[0].cash)} 万进场。`, "sys");
   log(`对手：${others.slice(0, 3).map(c => c.name).join("、")}。`, "");
   logSep(state.players[0], true);
   updateButton();
