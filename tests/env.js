@@ -205,6 +205,7 @@ const EXPORTS = [
   'state', 'CHAPTERS', 'RENT_RATE', 'TOLL_RATE', 'UP_GATE', 'PIECE', 'RISK',
   // 纯函数 / 业务函数
   'year', 'monthLabel', 'curCh', 'chapterMonth', 'buildRings', 'curCells', 'allCells', 'owned',
+  'curRegions', 'hottestRegions', 'shopPrice', 'askShop', 'enterShop',
   'eraF', 'heatF', 'value', 'rentOf', 'neighbors', 'adjacentBonus', 'adjCount', 'sandwichedOwner',
   'tollParts', 'tollOf', 'leverage', 'cappedFor', 'tollFor', 'upCost', 'estateValue', 'netWorth', 'loanCap', 'loanRate',
   'hasPolicy', 'setPolicy', 'extendPolicy', 'clearPolicy', 'heatAdd', 'raiseCap', 'triggerStall',
@@ -282,6 +283,7 @@ function createEnv(options = {}) {
     askUpgrade = async () => __dialog.accept;
     askBank = async () => null;
     askStock = async () => null;
+    askShop = async () => {};      // 踩到道具店不弹窗，需要时测试直接调 env.askShop
   `, ctx, { filename: 'dialog-stub.js' });
 
   const env = {

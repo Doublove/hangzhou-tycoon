@@ -203,8 +203,8 @@ const RINGS = [
 // 每环的格位排列：起点 1 + 地块 16 + 功能格 9（V1.1 新增监狱、风景区）
 const TRACK_PATTERN = [
   "start","p0","p1","chance","p2","p3","fate","p4","p5",
-  "chance","p6","p7","tax","p8","p9","fate","p10","p11",
-  "bank","p12","p13","jail","p14","p15","scenic","stock"
+  "jail","p6","p7","tax","p8","p9","shop","p10","p11",
+  "bank","p12","p13","chance","p14","p15","scenic","stock"
 ];
 
 // 各章的风景区格：机制相同，只换地名（西湖只在第一章的地理范围内成立）
@@ -343,8 +343,8 @@ const CHANCE = [
   }},
   { t:"温州老乡",   d:"获得一笔无息借款 150 万", act:p => { p.cash += 150; p.debt += 150; return "借入 150 万（仍计负债）"; } },
   { t:"摇号中签",   d:"免费获得一次购买资格", act:p => { p.freePass = true; return "本回合买地免摇号"; } },
-  { t:"地铁规划泄露", d:"指定区域热度 +15", act:p => {
-      const r = pick(Object.keys(REGIONS)); heatAdd([r], 15); return `${r} 热度 +15`; } },
+  { t:"地铁规划泄露", d:"本环某区域热度 +15", act:p => {
+      const r = pick(curRegions()); heatAdd([r], 15); return `${r} 热度 +15`; } },
   { t:"直播带看",   d:"现金 +80 万，但下月舆情风险", act:p => { p.cash += 80; p.risk = 1; return "现金 +80 万"; } },
   { t:"老客户介绍", d:"现金 +35 万", act:p => { p.cash += 35; return "现金 +35 万"; } },
   { t:"车位热销",   d:"每块自有地块 +8 万", act:p => {
@@ -361,7 +361,8 @@ const CHANCE = [
       const list = owned(p).filter(x => (x.region === "城北" || x.region === "城东"));
       const sum = list.reduce((s,x) => s + x.lv * 5, 0);
       p.cash += sum; return sum ? `补偿 +${sum} 万` : "没有相关地块"; } },
-  { t:"学区挂牌",   d:"西湖边、城西热度 +10", act:p => { heatAdd(["西湖边","城西"], 10); return "两地热度 +10"; } },
+  { t:"学区挂牌",   d:"本环热度最高的两个区域 +10", act:p => {
+      const rs = hottestRegions(2); heatAdd(rs, 10); return `${rs.join("、")} 热度 +10`; } },
   { t:"网红打卡",   d:"随机一块自有地块租金翻倍 3 个月", act:p => {
       const c = owned(p).filter(x => x.lv > 0);
       if (!c.length) return "没有可出租的地块";
@@ -406,7 +407,8 @@ const FATE = [
       return `现金 −70 万，股票缩水 ${loss} 万`; } },
   { t:"中介带看",   d:"现金 +30 万", act:p => { p.cash += 30; return "现金 +30 万"; } },
   { t:"限价传闻",   d:"下月起卖地收益封顶", act:p => { setPolicy("pricecap", state.absMonth + 6); return "限价预期升温"; } },
-  { t:"学区调整",   d:"西湖边、城西 −25", act:p => { heatAdd(["西湖边","城西"], -25); return "两地热度 −25"; } },
+  { t:"学区调整",   d:"本环热度最高的两个区域 −25", act:p => {
+      const rs = hottestRegions(2); heatAdd(rs, -25); return `${rs.join("、")} 热度 −25`; } },
   { t:"交付延期",   d:"Lv1 地块暂停收租 3 个月", act:p => {
       owned(p).filter(x => x.lv === 1).forEach(x => x.boost = -3);
       return "工地暂缓"; } },
@@ -421,8 +423,8 @@ const FATE = [
           sellLand(p, c); return `${c.name} 被强制处置`;
       }
       return "暂未触及红线"; } },
-  { t:"舆情反噬",   d:"随机区域热度 −15", act:p => {
-      const r = pick(Object.keys(REGIONS)); heatAdd([r], -15); return `${r} 热度 −15`; } },
+  { t:"舆情反噬",   d:"本环随机区域热度 −15", act:p => {
+      const r = pick(curRegions()); heatAdd([r], -15); return `${r} 热度 −15`; } },
   { t:"中介跑路",   d:"现金 −60 万", act:p => { p.cash -= 60; return "现金 −60 万"; } },
   { t:"工期延误",   d:"最贵的地块暂停收租 2 个月", act:p => {
       const c = owned(p).sort((a,b) => value(b) - value(a))[0];

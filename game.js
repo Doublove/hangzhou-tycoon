@@ -102,7 +102,7 @@ function buildRings(){
         const sc = SCENIC[ri] || SCENIC[0];
         return { t:"scenic", name:sc.short, fullName:sc.full, ring:ri, idx };
       }
-      const label = { chance:"机会", fate:"命运", bank:"银行", tax:"税务", stock:"证券" }[token];
+      const label = { chance:"机会", fate:"命运", bank:"银行", tax:"税务", stock:"证券", shop:"道具店" }[token];
       return { t:token, name:label, ring:ri, idx };
     });
     return { cells, name:ring.name, years:ring.years };
@@ -110,6 +110,17 @@ function buildRings(){
 }
 
 const curCells = () => state.rings[curCh().ring].cells;
+
+/* 当前环上实际有地块的区域。卡牌只应影响这些区域，
+   否则会出现「第二章抽到西湖边降温」这种无效又出戏的结果。 */
+function curRegions(){
+  const set = new Set();
+  curCells().forEach(c => { if (c.t === "plot") set.add(c.region); });
+  return [...set];
+}
+function hottestRegions(n){
+  return curRegions().sort((a, b) => (state.heat[b] || 0) - (state.heat[a] || 0)).slice(0, n);
+}
 const allCells = () => state.rings.flatMap(r => r.cells);
 const owned = p => allCells().filter(c => c.t === "plot" && c.owner === p);
 
@@ -645,7 +656,9 @@ function renderCells(){
     const el = document.querySelector(`.cell[data-i="${cell.idx}"]`);
     if (!el) return;
     el.classList.toggle("blocked", !!cell.block);
-    if (cell.t === "jail" || cell.t === "scenic"){ el.classList.add(cell.t); return; }
+    if (cell.t === "jail" || cell.t === "scenic" || cell.t === "shop"){
+      el.classList.add(cell.t); return;
+    }
     if (cell.t !== "plot") return;
     el.classList.toggle("locked", !cell.unlocked);
     el.classList.toggle("broken", !!cell.broken);
@@ -914,6 +927,13 @@ function showCell(c){
         <div class="kv"><span>期间</span><b>不能移动、不能买卖</b></div>
         <div class="kv"><span>现金流</span><b>租金照收，利息照付</b></div>
         <p class="sub" style="margin-top:8px">阿莲的被动让停留回合数减半。这是全作唯一花钱也解决不了的惩罚。</p>`;
+    } else if (c.t === "shop"){
+      const p = state.players[0];
+      const price = p ? shopPrice(p) : 20;
+      body = `<p class="sub">四种道具只在这里买得到。售价 = 当前净资产的 <b>3%</b>（最低 20 万）。</p>
+        <div class="kv"><span>你当前的价格</span><b>${fmt(price)} 万 / 件</b></div>
+        ${ITEM_KEYS.map(k => `<div class="kv"><span>${ITEMS[k].icon} ${ITEMS[k].name}</span><b>持有 ${p ? itemCount(p, k) : 0}</b></div>`).join("")}
+        <p class="sub" style="margin-top:8px">越有钱，道具越贵。</p>`;
     } else if (c.t === "tax"){
       body = `<p class="sub">每次经过按净资产 <b>1.2%</b> 缴税。</p>`;
     } else if (c.t === "stock"){
@@ -1065,6 +1085,59 @@ function takeItem(p, k){
   p.items[k]--;
   renderItems();
   return true;
+}
+
+/* ---------------- 道具店 ----------------
+   售价按玩家当前净资产的 3% 浮动，最低 20 万。
+   净资产越高，道具越贵 —— 领先者不能靠钱把道具刷满。
+----------------------------------------------------- */
+function shopPrice(p){
+  return Math.max(20, Math.round(Math.max(0, netWorth(p)) * 0.03));
+}
+
+function askShop(p){
+  return new Promise(res => {
+    const paint = () => {
+      const price = shopPrice(p);
+      const rows = ITEM_KEYS.map(k => `
+        <div class="kv">
+          <span>${ITEMS[k].icon} ${ITEMS[k].name}　<small style="color:#9A9184">持有 ${itemCount(p, k)}</small></span>
+          <b><button class="btn-sub" style="padding:5px 9px;font-size:11px;min-width:0"
+             ${p.cash >= price ? "" : "disabled"} onclick="__buyItem('${k}')">${fmt(price)} 万</button></b>
+        </div>`).join("");
+      openSheet(`
+        <h3>道具商店</h3>
+        <p class="sub">四种道具只在这里买得到。售价 = 你当前净资产的 <b>3%</b>（最低 20 万）。</p>
+        <div class="kv"><span>你的现金</span><b>${fmt(p.cash)} 万</b></div>
+        ${rows}
+        <div class="btns"><button class="btn-sub" onclick="__shopDone()">离开</button></div>`);
+      window.__buyItem = k => {
+        if (p.cash < price) return;
+        p.cash -= price;
+        giveItem(p, k, 1, true);
+        log(`<b>${p.name}</b> 在道具店买了【${ITEMS[k].name}】（${fmt(price)} 万）`, "");
+        paint();
+      };
+      window.__shopDone = () => { closeSheet(); res(); };
+    };
+    paint();
+  });
+}
+
+async function enterShop(p){
+  const price = shopPrice(p);
+  if (p.human){
+    await askShop(p);
+  } else if (p.cash > price * 3){
+    /* AI：现金宽裕就补一件手上最缺的，最多囤到 2 件 */
+    const need = ITEM_KEYS.slice().sort((a, b) => itemCount(p, a) - itemCount(p, b))[0];
+    if (itemCount(p, need) < 2){
+      p.cash -= price;
+      giveItem(p, need, 1, true);
+      log(`<b>${p.name}</b> 在道具店买了【${ITEMS[need].name}】（${fmt(price)} 万）`, "");
+    }
+  }
+  renderHUD();
 }
 
 /* 特定格子的小概率掉落 */
@@ -1372,6 +1445,8 @@ async function landOn(p, c){
     if (bought) dropItem(p, "uturn", CFG.items.stockUturn, "买入指数");
     renderHUD(); return;
   }
+
+  if (c.t === "shop"){ await enterShop(p); return; }
 
   if (c.t === "jail"){ sendToJail(p, "踩进监狱"); return; }
 

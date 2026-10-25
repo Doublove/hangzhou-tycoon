@@ -103,13 +103,15 @@
         transition:transform .12s, box-shadow .12s}
   .cell .nm{font-weight:700;text-align:center;padding:0 1px}
   .cell .lv{font-size:7px;color:var(--gold);height:8px;letter-spacing:-1px}
-  .cell.special{background:#FAF7F0;font-size:9px}
+  /* 功能格：深色底白字，与地块（浅色）形成明确分层 */
+  .cell.special{background:#3D3630;color:#F5F0E6;border-color:#2A2420;font-size:9px}
   .cell.locked{background:#F0EBE1;color:#B5A99A;border-style:dashed}
   .cell.broken{background:#F3E7E5;border-color:#D9B8B3;color:#A5797A}
   .cell.owned{box-shadow:inset 0 0 0 3px var(--owner,#ccc)}
   .cell .bar{position:absolute;bottom:0;left:0;right:0;height:4px;background:transparent}
-  .cell.jail{background:#EDE7EF;border-color:#B9A9C4;color:#5E4A6B}
-  .cell.scenic{background:#E7F2EA;border-color:#A9C7B4;color:#2F6B4F}
+  .cell.jail{background:#4A3A55;border-color:#382C40;color:#F0EAF4}
+  .cell.scenic{background:#2F5A46;border-color:#244738;color:#EAF4EE}
+  .cell.shop{background:#5A4A2A;border-color:#453719;color:#FBF3DF}
 
   /* 棋子：国际象棋造型，高度 = 地块图标的 1.5 倍 */
   .token{position:absolute;width:30px;height:30px;transform:translate(-50%,-50%);z-index:6;
@@ -342,7 +344,7 @@
 <div class="toast" id="toast"></div>
 <div id="tip"></div>
 
-<script src="data.js?v=1.7.2"></script>
-<script src="game.js?v=1.7.2"></script>
+<script src="data.js?v=1.8.0"></script>
+<script src="game.js?v=1.8.0"></script>
 </body>
 </html>

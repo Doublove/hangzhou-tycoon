@@ -375,3 +375,63 @@ test('TC-CARD-33 抽卡不会让游戏崩溃，效果字符串可展示', () => 
     assert.ok(msg.length > 0, `${card.t} 文案为空`);
   });
 });
+
+/* ---------------- 卡牌只作用于当前章节的区域 ---------------- */
+
+test('TC-CARD-34 当前环的区域列表与棋盘一致', () => {
+  const env = F.boot({ chapter: 1 });          // 第二章
+  const regions = env.curRegions();
+  assert.ok(regions.length >= 4);
+  assert.ok(!regions.includes('西湖边'), '第二章棋盘上没有西湖边');
+  assert.ok(!regions.includes('城西'), '第二章棋盘上没有城西');
+  assert.ok(regions.includes('钱江新城'));
+
+  const fromCells = new Set(env.curCells().filter(c => c.t === 'plot').map(c => c.region));
+  assert.deepEqual([...regions].sort(), [...fromCells].sort());
+});
+
+test('TC-CARD-35 学区调整只降当前环区域的热度', () => {
+  const env = F.boot({ chapter: 1 });
+  const cur = env.curRegions();
+  const others = Object.keys(env.REGIONS).filter(r => !cur.includes(r));
+  const before = others.map(r => env.state.heat[r]);
+
+  env.FATE.find(c => c.t === '学区调整').act(env.state.players[0]);
+
+  assert.deepEqual(others.map(r => env.state.heat[r]), before, '非本章区域不应被改动');
+});
+
+test('TC-CARD-36 学区挂牌只抬当前环区域的热度', () => {
+  const env = F.boot({ chapter: 1 });
+  const cur = env.curRegions();
+  const others = Object.keys(env.REGIONS).filter(r => !cur.includes(r));
+  const before = others.map(r => env.state.heat[r]);
+
+  env.CHANCE.find(c => c.t === '学区挂牌').act(env.state.players[0]);
+
+  assert.deepEqual(others.map(r => env.state.heat[r]), before);
+});
+
+test('TC-CARD-37 随机区域类卡牌只从当前环里挑', () => {
+  const env = F.boot({ chapter: 1 });
+  const cur = env.curRegions();
+  const others = Object.keys(env.REGIONS).filter(r => !cur.includes(r));
+  const before = others.map(r => env.state.heat[r]);
+
+  env.setRandom([0]);
+  env.CHANCE.find(c => c.t === '地铁规划泄露').act(env.state.players[0]);
+  env.FATE.find(c => c.t === '舆情反噬').act(env.state.players[0]);
+
+  assert.deepEqual(others.map(r => env.state.heat[r]), before);
+});
+
+test('TC-CARD-38 卡牌描述不再写死具体区域名', () => {
+  const env = F.boot();
+  const fixed = ['学区调整', '学区挂牌', '地铁规划泄露', '舆情反噬'];
+  fixed.forEach(name => {
+    const card = [...env.CHANCE, ...env.FATE].find(c => c.t === name);
+    assert.ok(card, `找不到 ${name}`);
+    assert.match(card.d, /本环/, `${name} 的描述应改为「本环…」`);
+    assert.doesNotMatch(card.d, /西湖边|城西|钱江/, `${name} 不应写死区域名`);
+  });
+});

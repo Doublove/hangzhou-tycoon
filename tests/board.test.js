@@ -37,9 +37,9 @@ test('TC-MAP-02 每环 26 格（起点 1 + 地块 16 + 功能格 9）', () => {
   });
 });
 
-test('TC-MAP-03 功能格构成：机会2 命运2 银行1 税务1 证券1 监狱1 风景区1', () => {
+test('TC-MAP-03 功能格构成：机会2 命运1 道具店1 银行1 税务1 证券1 监狱1 风景区1', () => {
   const env = F.boot();
-  const expected = { chance: 2, fate: 2, bank: 1, tax: 1, stock: 1, jail: 1, scenic: 1 };
+  const expected = { chance: 2, fate: 1, shop: 1, bank: 1, tax: 1, stock: 1, jail: 1, scenic: 1 };
   env.state.rings.forEach((ring, i) => {
     const count = t => ring.cells.filter(c => c.t === t).length;
     Object.entries(expected).forEach(([t, n]) => {
@@ -177,4 +177,21 @@ test('TC-MAP-16 26 格单骰一圈约 7.4 回合（节奏预算）', () => {
   assert.equal(env.curCells().length, 26);
   const laps = 26 / 3.5;   // 单骰期望 3.5
   assert.ok(laps > 7 && laps < 8, `一圈应约 7.4 回合，实际 ${laps.toFixed(2)}`);
+});
+
+test('TC-MAP-17 监狱在第 9 格，机会在第 21 格（v1.8 交换）', () => {
+  const env = F.boot();
+  env.state.rings.forEach((ring, i) => {
+    assert.equal(ring.cells[9].t, 'jail', `第 ${i} 环 9 号格应为监狱`);
+    assert.equal(ring.cells[21].t, 'chance', `第 ${i} 环 21 号格应为机会`);
+  });
+});
+
+test('TC-MAP-18 15 号格是道具店，且每环唯一', () => {
+  const env = F.boot();
+  env.state.rings.forEach((ring, i) => {
+    assert.equal(ring.cells[15].t, 'shop', `第 ${i} 环 15 号格应为道具店`);
+    assert.equal(ring.cells[15].name, '道具店');
+    assert.equal(ring.cells.filter(c => c.t === 'shop').length, 1);
+  });
 });
