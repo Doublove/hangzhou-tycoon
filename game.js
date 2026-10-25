@@ -691,7 +691,7 @@ function drawKline(cv, hist, p){
   lo -= pad; hi += pad;
   const yOf = v => padT + (hi - v) / (hi - lo) * (h - padT - padB);
 
-  g.strokeStyle = "rgba(255,255,255,.09)";
+  g.strokeStyle = "rgba(40,36,32,.10)";
   g.lineWidth = 1;
   for (let i = 1; i <= 2; i++){
     const yy = padT + (h - padT - padB) * i / 3;
@@ -703,7 +703,7 @@ function drawKline(cv, hist, p){
   hist.forEach((d, i) => {
     const x = padL + bw * i + bw / 2;
     const up = d.c >= d.o;
-    const color = up ? "#FF4D3D" : "#12D68A";
+    const color = up ? "#D93B30" : "#1B9E5A";
     g.fillStyle = color;
     g.strokeStyle = color;
     const top = yOf(Math.max(d.o, d.c));
@@ -724,13 +724,13 @@ function drawKline(cv, hist, p){
       const at = lot.idx != null ? lot.idx : lot.price * 10;
       /* 买入价贴顶时把标记压回绘图区，别画到画布外 */
       const yy = Math.max(padT + 9, Math.min(h - padB - 2, yOf(at)));
-      g.strokeStyle = "rgba(232,178,58,.55)";
+      g.strokeStyle = "rgba(201,162,39,.55)";
       g.lineWidth = 1;
       g.setLineDash([3, 2]);
       g.beginPath(); g.moveTo(x, yy); g.lineTo(w, yy); g.stroke();
       g.setLineDash([]);
-      g.fillStyle = "#E8B23A";
-      g.strokeStyle = "#0A0B0D";
+      g.fillStyle = "#C9A227";
+      g.strokeStyle = "#FFFFFF";
       g.lineWidth = 1.5;
       g.beginPath();
       g.moveTo(x, yy - 3);
@@ -834,7 +834,7 @@ function renderBoard(){
     el.style.top = (50 + R * Math.sin(a)) + "%";
     el.onclick = () => onCellClick(cell);
     el.innerHTML = cell.t === "plot"
-      ? `<span class="bld" data-lv="${cell.lv}"></span><span class="nm">${cell.name}</span><span class="bar"></span>`
+      ? `<span class="nm">${cell.name}</span><span class="bar"></span>`
       : `<span class="nm">${cell.name}</span>`;
     wrap.appendChild(el);
   });
@@ -857,8 +857,7 @@ function renderCells(){
     el.classList.toggle("chain", chained);
     el.dataset.chain = chained ? "×2" : "";
     el.style.background = chained ? cell.owner.color + "1F" : "";
-    const bld = el.querySelector(".bld");
-    if (bld) bld.dataset.lv = cell.lv;
+
     const bar = el.querySelector(".bar");
     if (cell.owner){
       el.classList.add("owned");
@@ -872,6 +871,26 @@ function renderCells(){
     }
   });
   renderChains();
+  renderBuildings();
+}
+
+/* 建筑画在环内侧：格子只留名字，房子单独一层，互不挤压 */
+function renderBuildings(){
+  const wrap = $("#boardWrap");
+  if (!wrap) return;
+  wrap.querySelectorAll(".bld").forEach(n => n.remove());
+  const cells = curCells(), n = cells.length;
+  const Rb = 35;                       // 建筑所在半径（%）；格子 43%，留出「格子半径+建筑半径」的空隙
+  cells.forEach((c, i) => {
+    if (c.t !== "plot" || !c.owner || c.lv <= 0 || c.broken) return;
+    const a = (-90 + i * 360 / n) * Math.PI / 180;
+    const d = document.createElement("div");
+    d.className = "bld";
+    d.dataset.lv = c.lv;
+    d.style.left = (50 + Rb * Math.cos(a)) + "%";
+    d.style.top = (50 + Rb * Math.sin(a)) + "%";
+    wrap.appendChild(d);
+  });
 }
 
 /* 连片特效：沿环外侧画一条同色连接带，把相邻同主的两格串起来
