@@ -12,6 +12,50 @@ const rnd = n => Math.floor(Math.random() * n);
 
 const RENT_RATE = [0, 0.008, 0.011, 0.014, 0.017, 0.020];
 const stockLot = () => Math.round(state.stockPrice * 0.1);   // 每手 ≈ 100 万
+
+/* ---------------- 证券持仓 ----------------
+   stockLots 记录每次买入的月份、单价与手数，卖出按先进先出扣减，
+   这样才能在 K 线上标出"什么时候、什么价买的"，并算出真实成本。
+----------------------------------------------------- */
+function stockCost(p){
+  if (!p || !p.stock) return 0;
+  const lots = p.stockLots || [];
+  /* 旧存档只有手数没有成本记录，按现价兜底，盈亏显示为 0 而不是 NaN */
+  if (!lots.length) return (p.stock || 0) * stockLot();
+  return lots.reduce((sum, l) => sum + l.price * l.lots, 0);
+}
+function stockValue(p){ return ((p && p.stock) || 0) * stockLot(); }
+function stockPnl(p){
+  const cost = stockCost(p);
+  const value = stockValue(p);
+  const profit = value - cost;
+  return { cost, value, profit, rate: cost > 0 ? profit / cost : 0 };
+}
+function buyStock(p, n = 1){
+  const price = stockLot();
+  p.cash -= price * n;
+  p.stock = (p.stock || 0) + n;
+  (p.stockLots = p.stockLots || []).push({
+    m: state.absMonth, price, lots: n, idx: state.stockPrice,
+  });
+  return price;
+}
+function sellStock(p, n = 1){
+  n = Math.min(n, p.stock || 0);
+  if (n <= 0) return 0;
+  const price = stockLot();
+  p.cash += price * n;
+  p.stock -= n;
+  let left = n;
+  while (left > 0 && p.stockLots && p.stockLots.length){
+    const lot = p.stockLots[0];
+    const take = Math.min(lot.lots, left);
+    lot.lots -= take;
+    left -= take;
+    if (lot.lots <= 0) p.stockLots.shift();
+  }
+  return price;
+}
 const TOLL_RATE = [0, 0.10, 0.12, 0.14, 0.16, 0.18];   // V1.1：Lv1 由 4% 上调至 10%
 const PIECE = ["♚", "♛", "♜", "♞"];                 // 王 / 后 / 车 / 马
 const UP_GATE  = [{}, {}, {m:1, h:30}, {m:2, h:45}, {m:3, h:60}, {m:6, h:75}];
@@ -28,7 +72,7 @@ const SAVE_PREFIX = "hztycoon_v1_";
 const state = {
   chapter:0, absMonth:0, turnIdx:0, turnCount:0,
   rings:[], heat:{}, players:[], mods:[], fired:{},
-  stockPrice:1000, busy:false, over:false,
+  stockPrice:1000, stockHistory:[], busy:false, over:false,
   freezeBuy:0, freezeRegion:null, started:false,
   charId:"hang", diff:"normal"
 };
@@ -204,13 +248,20 @@ function renderHUD(){
   $("#turnInfo").textContent = `第 ${Math.min(done + 1, ch.months)} / ${ch.months} 月`;
   $("#bar-fill").style.width = Math.min(100, done / ch.months * 100) + "%";
 
+  /* 实时排名：按净资产，破产者垫底且不参与名次 */
+  const alive = state.players.filter(p => !p.bankrupt)
+    .slice().sort((a, b) => netWorth(b) - netWorth(a));
+  const rankOf = new Map(alive.map((p, i) => [p.id, i + 1]));
+
   const box = $("#players");
   box.innerHTML = "";
   state.players.forEach(p => {
     const d = document.createElement("div");
     d.className = "pcard" + (p.id === state.turnIdx && !state.over ? " active" : "") + (p.bankrupt ? " dead" : "");
-    d.innerHTML = `<span class="dot" style="background:${p.color}"></span>
-      <span class="pname">${p.name}</span>
+    const r = rankOf.get(p.id);
+    d.innerHTML = `<span class="prank${r && r <= 3 ? " r" + r : ""}">${r || "—"}</span>
+      <span class="dot" style="background:${p.color}"></span>
+      <span class="pname" title="${p.name} · 净资产 ${fmt(netWorth(p))} 万">${p.name}</span>
       <span class="pmoney"><span class="pcash">${fmt(p.cash)}万</span>
       ${p.debt > 0 ? `<br><span class="pdebt">负债 ${fmt(p.debt)}</span>` : ""}</span>`;
     box.appendChild(d);
@@ -337,6 +388,7 @@ function renderHUD(){
   }
 
   renderItems();
+  renderKline();
   renderSkillBtn();
 }
 
@@ -359,6 +411,123 @@ function renderItems(){
   box.querySelectorAll(".item").forEach(b => {
     b.onclick = () => onItemClick(b.dataset.item);
   });
+}
+
+/* ---------------- 证券 K 线 ----------------
+   每回合一个数据点：开盘 = 上月收盘，收盘 = 本月结算价。
+   涨红跌绿（中国习惯），金色三角标出玩家每次买入的位置与价格。
+----------------------------------------------------- */
+function klineWindow(limit){
+  const hist = state.stockHistory || [];
+  return hist.slice(-limit);
+}
+
+function renderKline(){
+  const p = humanPlayer() || (SIM ? state.players[state.turnIdx] : null);
+  const hist = klineWindow(60);
+  const price = state.stockPrice;
+
+  const priceEl = $("#k-price");
+  if (priceEl) priceEl.textContent = fmt(price);
+
+  const chgEl = $("#k-chg");
+  if (chgEl){
+    const prev = hist.length > 1 ? hist[hist.length - 2].c : price;
+    const chg = prev ? (price - prev) / prev * 100 : 0;
+    chgEl.textContent = `${chg > 0 ? "+" : ""}${chg.toFixed(1)}%`;
+    chgEl.className = "k-chg" + (chg > 0 ? " up" : chg < 0 ? " down" : "");
+  }
+
+  const sp = stockPnl(p);
+  const holdEl = $("#k-hold");
+  if (holdEl) holdEl.textContent = `持仓 ${(p && p.stock) || 0} 手`;
+  const valEl = $("#k-value");
+  if (valEl) valEl.textContent = `市值 ${fmt(sp.value)} 万`;
+  const pnlEl = $("#k-pnl");
+  if (pnlEl){
+    if (!p || !p.stock){
+      pnlEl.textContent = "盈亏 —";
+      pnlEl.className = "";
+    } else {
+      const sign = sp.profit >= 0 ? "+" : "";
+      pnlEl.textContent = `盈亏 ${sign}${fmt(sp.profit)} 万（${sign}${(sp.rate * 100).toFixed(1)}%）`;
+      pnlEl.className = sp.profit >= 0 ? "up" : "down";
+    }
+  }
+
+  drawKline($("#kchart"), hist, p);
+}
+
+function drawKline(cv, hist, p){
+  if (!cv || typeof cv.getContext !== "function" || !hist.length) return;
+  const dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth || 320;
+  const h = cv.clientHeight || 92;
+  cv.width = Math.round(w * dpr);
+  cv.height = Math.round(h * dpr);
+  const g = cv.getContext("2d");
+  if (!g) return;
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, w, h);
+
+  const padT = 8, padB = 10, padL = 2, padR = 2;
+  const prices = hist.flatMap(d => [d.o, d.c]);
+  let lo = Math.min(...prices), hi = Math.max(...prices);
+  if (hi === lo){ hi += 1; lo -= 1; }
+  const pad = (hi - lo) * 0.1;
+  lo -= pad; hi += pad;
+  const yOf = v => padT + (hi - v) / (hi - lo) * (h - padT - padB);
+
+  g.strokeStyle = "#EDE5D6";
+  g.lineWidth = 1;
+  for (let i = 1; i <= 2; i++){
+    const yy = padT + (h - padT - padB) * i / 3;
+    g.beginPath(); g.moveTo(0, yy); g.lineTo(w, yy); g.stroke();
+  }
+
+  const bw = (w - padL - padR) / hist.length;
+  const cw = Math.max(1.5, Math.min(9, bw * 0.62));
+  hist.forEach((d, i) => {
+    const x = padL + bw * i + bw / 2;
+    const up = d.c >= d.o;
+    const color = up ? "#C0392B" : "#1B7A3E";
+    g.fillStyle = color;
+    g.strokeStyle = color;
+    const top = yOf(Math.max(d.o, d.c));
+    const bot = yOf(Math.min(d.o, d.c));
+    /* 没有盘中数据，实体即全部；一字板时给 1px 高度以免看不见 */
+    g.fillRect(x - cw / 2, top, cw, Math.max(1, bot - top));
+  });
+
+  // 买入点：金色三角 + 成本虚线
+  if (p && Array.isArray(p.stockLots) && p.stockLots.length){
+    const first = hist[0].m, last = hist[hist.length - 1].m;
+    p.stockLots.forEach(lot => {
+      if (lot.m < first || lot.m > last) return;
+      const idx = hist.findIndex(d => d.m === lot.m);
+      if (idx < 0) return;
+      const x = padL + bw * idx + bw / 2;
+      /* 老记录只有每手价，按 ×10 还原成指数点位 */
+      const at = lot.idx != null ? lot.idx : lot.price * 10;
+      /* 买入价贴顶时把标记压回绘图区，别画到画布外 */
+      const yy = Math.max(padT + 9, Math.min(h - padB - 2, yOf(at)));
+      g.strokeStyle = "rgba(184,134,11,.55)";
+      g.lineWidth = 1;
+      g.setLineDash([3, 2]);
+      g.beginPath(); g.moveTo(x, yy); g.lineTo(w, yy); g.stroke();
+      g.setLineDash([]);
+      g.fillStyle = "#B8860B";
+      g.strokeStyle = "#fff";
+      g.lineWidth = 1.5;
+      g.beginPath();
+      g.moveTo(x, yy - 3);
+      g.lineTo(x - 5.5, yy - 11);
+      g.lineTo(x + 5.5, yy - 11);
+      g.closePath();
+      g.fill();
+      g.stroke();
+    });
+  }
 }
 
 function renderSkillBtn(){
@@ -533,7 +702,9 @@ function renderTokens(){
       t.style.color = p.color;
       t.textContent = PIECE[p.id] || "♟";
       // 同格多人时缩小并横向排开，避免叠在一起看不清
-      const size = cnt === 1 ? 27 : cnt === 2 ? 24 : 21;
+      /* 大屏棋盘放大，棋子按容器宽度等比跟上 */
+      const scale = Math.min(1.35, Math.max(1, (wrap.clientWidth || 400) / 400));
+      const size = Math.round((cnt === 1 ? 27 : cnt === 2 ? 24 : 21) * scale);
       t.style.fontSize = size + "px";
       const dx = cnt > 1 ? (k - (cnt - 1) / 2) * (size * 0.78) : 0;
       t.style.left = `calc(${bx}% + ${dx}px)`;
@@ -845,11 +1016,14 @@ function askStock(p){
   return new Promise(res => {
     const price = stockLot();
     const canBuy = p.cash >= price;
+    const sp = stockPnl(p);
     openSheet(`
       <h3>证券交易所</h3>
       <p class="sub">杭州楼市指数 ${fmt(state.stockPrice)} 点　每手 100 股 ≈ ${fmt(price)} 万</p>
       <div class="kv"><span>你的持仓</span><b>${p.stock || 0} 手</b></div>
-      <div class="kv"><span>市值</span><b>${fmt((p.stock || 0) * state.stockPrice)} 万</b></div>
+      <div class="kv"><span>持仓成本</span><b>${fmt(sp.cost)} 万</b></div>
+      <div class="kv"><span>市值</span><b>${fmt(sp.value)} 万</b></div>
+      <div class="kv"><span>浮动盈亏</span><b style="color:${sp.profit >= 0 ? "var(--red)" : "var(--green)"}">${sp.profit >= 0 ? "+" : ""}${fmt(sp.profit)} 万（${sp.profit >= 0 ? "+" : ""}${(sp.rate * 100).toFixed(1)}%）</b></div>
       <div class="btns">
         <button class="btn-sub" onclick="__st(0)">不办</button>
         <button class="btn-sub" ${p.stock > 0 ? "" : "disabled"} onclick="__st('sell')">卖一手</button>
@@ -1176,10 +1350,10 @@ async function landOn(p, c){
     let bought = false;
     if (p.human){
       const act = await askStock(p);
-      if (act === "buy"){ p.cash -= stockLot(); p.stock = (p.stock || 0) + 1; bought = true; log(`<b>${p.name}</b> 买入 1 手指数`, ""); }
-      if (act === "sell"){ p.cash += stockLot(); p.stock--; log(`<b>${p.name}</b> 卖出 1 手指数`, ""); }
+      if (act === "buy"){ buyStock(p, 1); bought = true; log(`<b>${p.name}</b> 买入 1 手指数 @${fmt(stockLot())} 万`, ""); }
+      if (act === "sell"){ sellStock(p, 1); log(`<b>${p.name}</b> 卖出 1 手指数 @${fmt(stockLot())} 万`, ""); }
     } else if (p.cash > aiNeed(p) * 2.2 && Math.random() < 0.4){
-      p.cash -= stockLot(); p.stock = (p.stock || 0) + 1; bought = true;
+      buyStock(p, 1); bought = true;
       log(`<b>${p.name}</b> 买入 1 手指数`, "");
     }
     if (bought) dropItem(p, "uturn", CFG.items.stockUturn, "买入指数");
@@ -1662,8 +1836,12 @@ async function endMonth(){
     p.skipBao = false;
   });
 
-  // 股票
-  state.stockPrice = Math.max(200, Math.round(state.stockPrice * (0.96 + Math.random() * 0.08)));
+  // 股票：月度收盘价，同时留一条 K 线（开盘 = 上月收盘）
+  const prevPrice = state.stockPrice;
+  state.stockPrice = Math.max(200, Math.round(prevPrice * (0.96 + Math.random() * 0.08)));
+  state.stockHistory = state.stockHistory || [];
+  state.stockHistory.push({ m: state.absMonth, o: prevPrice, c: state.stockPrice });
+  if (state.stockHistory.length > 120) state.stockHistory.shift();
 
   // 历史事件
   EVENTS.forEach(e => {
@@ -1796,6 +1974,7 @@ function serialize(){
   return {
     v:1, chapter:state.chapter, absMonth:state.absMonth, turnIdx:state.turnIdx, turnCount:state.turnCount,
     heat:state.heat, mods:state.mods, fired:state.fired, stockPrice:state.stockPrice,
+    stockHistory: state.stockHistory || [],
     freezeBuy:state.freezeBuy, freezeRegion:state.freezeRegion,
     charId:state.charId, diff:state.diff,
     cells: allCells().filter(c => c.t === "plot").map(c => ({
@@ -1805,7 +1984,7 @@ function serialize(){
     })),
     players: state.players.map(p => ({
       id:p.id, cash:p.cash, debt:p.debt, pos:p.pos, bankrupt:p.bankrupt,
-      stock:p.stock || 0, savedOnce:!!p.savedOnce, bridge:p.bridge || 0, freePass:!!p.freePass,
+      stock:p.stock || 0, stockLots:p.stockLots || [], savedOnce:!!p.savedOnce, bridge:p.bridge || 0, freePass:!!p.freePass,
       inJail:!!p.inJail, jailFail:p.jailFail || 0, scenicTurns:p.scenicTurns || 0, scenicName:p.scenicName || "",
       liquidating:!!p.liquidating, liqDeadline:p.liqDeadline || 0,
       items:p.items || {}, skillCd:p.skillCd || 0
@@ -1835,12 +2014,15 @@ function restore(d){
   state.turnIdx = d.turnIdx; state.turnCount = d.turnCount;
   state.heat = d.heat; state.mods = d.mods; state.fired = d.fired;
   state.stockPrice = d.stockPrice; state.freezeBuy = d.freezeBuy || 0;
+  state.stockHistory = Array.isArray(d.stockHistory) && d.stockHistory.length
+    ? d.stockHistory
+    : [{ m: d.absMonth, o: d.stockPrice, c: d.stockPrice }];
   state.freezeRegion = d.freezeRegion || null;
   state.over = false; state.busy = false; state.started = true;
 
   state.players.forEach(p => {
     p.cash = 0; p.debt = 0; p.pos = 0; p.bankrupt = false;
-    p.stock = 0; p.savedOnce = false; p.bridge = 0; p.freePass = false;
+    p.stock = 0; p.stockLots = []; p.savedOnce = false; p.bridge = 0; p.freePass = false;
     p.inJail = false; p.jailFail = 0; p.scenicTurns = 0; p.scenicName = "";
     p.liquidating = false; p.liqDeadline = 0;
     p.items = Object.assign({}, CFG.items.start);
@@ -1850,6 +2032,9 @@ function restore(d){
     const p = state.players[s.id];
     p.cash = s.cash; p.debt = s.debt; p.pos = s.pos; p.bankrupt = s.bankrupt;
     p.stock = s.stock; p.savedOnce = s.savedOnce; p.bridge = s.bridge; p.freePass = s.freePass;
+    p.stockLots = Array.isArray(s.stockLots)
+      ? s.stockLots.map(l => ({ m: l.m, price: l.price, lots: l.lots, idx: l.idx }))
+      : [];
     p.inJail = !!s.inJail; p.jailFail = s.jailFail || 0;
     p.scenicTurns = s.scenicTurns || 0; p.scenicName = s.scenicName || "";
     p.liquidating = !!s.liquidating; p.liqDeadline = s.liqDeadline || 0;
@@ -1926,6 +2111,7 @@ function newGame(charId, diff, chapter){
   state.turnIdx = 0; state.turnCount = 0;
   state.busy = false; state.over = false; state.started = true;
   state.mods = []; state.fired = {}; state.stockPrice = 1000;
+  state.stockHistory = [{ m: state.absMonth, o: 1000, c: 1000 }];
   state.freezeBuy = 0; state.freezeRegion = null;
 
   state.heat = {};
@@ -1940,7 +2126,7 @@ function newGame(charId, diff, chapter){
   const eraAtStart = ERA[2010 + Math.floor(CHAPTERS[chapter].from / 12)] || 1;
   state.players = roster.map((c, i) => ({
     id:i, charId:c.id, name:c.name, color:c.color, trait:c.trait,
-    human: SIM ? false : i === 0, cash:Math.round(c.cash * eraAtStart), debt:0, pos:0, stock:0,
+    human: SIM ? false : i === 0, cash:Math.round(c.cash * eraAtStart), debt:0, pos:0, stock:0, stockLots:[],
     bankrupt:false, savedOnce:false, skipBuy:false, freePass:false,
     bridge:0, revalue:1, skipBao:false, risk:0,
     inJail:false, jailFail:0, scenicTurns:0, scenicName:"",

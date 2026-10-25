@@ -118,6 +118,22 @@ function createElement(tag = 'div') {
     configurable: true,
   });
 
+  if (String(tag).toLowerCase() === 'canvas') {
+    el._calls = [];
+    const ctx = {
+      fillStyle: '', strokeStyle: '', lineWidth: 1, font: '', textAlign: '',
+      setTransform() {}, clearRect() {}, beginPath() {}, moveTo() {}, lineTo() {},
+      stroke() {}, fill() {}, closePath() {}, setLineDash() {}, arc() {},
+      save() {}, restore() {}, translate() {}, scale() {}, fillText() {},
+      fillRect(...a) { el._calls.push(['fillRect', ...a]); },
+    };
+    el.getContext = () => ctx;
+    el.width = 320;
+    el.height = 92;
+    el.clientWidth = 320;
+    el.clientHeight = 92;
+  }
+
   Object.defineProperty(el, 'className', {
     get() { return [...cls].join(' '); },
     set(v) { cls = new Set(String(v).split(/\s+/).filter(Boolean)); },
@@ -151,7 +167,10 @@ function createDocument() {
     /* 真实 DOM 里不存在的选择器返回 null；这里统一给桩元素，
        因为渲染函数默认节点一定存在，测试关注逻辑而非 DOM 结构 */
     querySelector(sel) {
-      if (!cache.has(sel)) cache.set(sel, createElement('div'));
+      if (!cache.has(sel)) {
+        const tag = sel === '#kchart' ? 'canvas' : 'div';
+        cache.set(sel, createElement(tag));
+      }
       return cache.get(sel);
     },
     querySelectorAll() { return []; },
@@ -197,8 +216,9 @@ const EXPORTS = [
   'riskOf', 'avgToll', 'aiNeed', 'aiBuy', 'aiUpgrade', 'marketPrice', 'aiPreTurn', 'aiUseSkill',
   'aiUseItems', 'boostByBao', 'cellAhead', 'tollAhead', 'humanPlayer',
   'serialize', 'restore', 'saveTo', 'loadFrom', 'newGame', 'startScreen', 'log', 'logSep',
-  'stockLot', 'onItemClick', 'showCell', 'closeSheet', 'render',
-  'renderHUD', 'renderSkillBtn', 'renderItems',
+  'stockLot', 'onItemClick', 'showCell', 'closeSheet', 'render', 'askStock', 'askBuy', 'askBank',
+  'renderHUD', 'renderSkillBtn', 'renderItems', 'renderKline', 'drawKline', 'klineWindow',
+  'stockCost', 'stockValue', 'stockPnl', 'buyStock', 'sellStock',
   'showTip', 'showTipHTML', 'hideTip', 'activeMod', 'policyTip', 'legacyTip', 'skillTip',
 ];
 
