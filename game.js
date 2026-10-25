@@ -182,10 +182,13 @@ function tollFor(payer, c){
 }
 const upCost = c => Math.round(value(c) * CFG.upRate);
 
+/* 房产估值：地价 × (1 + 12% × 等级)。净资产与玩家栏共用这一个口径 */
+function estateValue(p){
+  return owned(p).reduce((s, c) => s + value(c) * (1 + 0.12 * c.lv), 0);
+}
 function netWorth(p){
-  const land = owned(p).reduce((s, c) => s + value(c) * (1 + 0.12 * c.lv), 0);
   const stock = (p.stock || 0) * stockLot();
-  return Math.round((p.cash + land + stock) * (p.revalue || 1) - p.debt);
+  return Math.round((p.cash + estateValue(p) + stock) * (p.revalue || 1) - p.debt);
 }
 function loanCap(p){
   const rate = hasPolicy("tightLoan") ? CFG.loanCapTight : CFG.loanCap;
@@ -259,11 +262,21 @@ function renderHUD(){
     const d = document.createElement("div");
     d.className = "pcard" + (p.id === state.turnIdx && !state.over ? " active" : "") + (p.bankrupt ? " dead" : "");
     const r = rankOf.get(p.id);
-    d.innerHTML = `<span class="prank${r && r <= 3 ? " r" + r : ""}">${r || "—"}</span>
-      <span class="dot" style="background:${p.color}"></span>
-      <span class="pname" title="${p.name} · 净资产 ${fmt(netWorth(p))} 万">${p.name}</span>
-      <span class="pmoney"><span class="pcash">${fmt(p.cash)}万</span>
-      ${p.debt > 0 ? `<br><span class="pdebt">负债 ${fmt(p.debt)}</span>` : ""}</span>`;
+    const estate = Math.round(estateValue(p));
+    const lots = p.stock || 0;
+    const holding = lots ? `${lots}手·${fmt(stockValue(p))}` : "—";
+    d.innerHTML = `
+      <div class="phead">
+        <span class="prank${r && r <= 3 ? " r" + r : ""}">${r || "—"}</span>
+        <span class="dot" style="background:${p.color}"></span>
+        <span class="pname" title="${p.name} · 净资产 ${fmt(netWorth(p))} 万">${p.name}</span>
+      </div>
+      <div class="pgrid">
+        <span class="pkv"><i>现金</i><b>${fmt(p.cash)}</b></span>
+        <span class="pkv"><i>负债</i><b class="${p.debt > 0 ? "neg" : "muted"}">${p.debt > 0 ? fmt(p.debt) : "—"}</b></span>
+        <span class="pkv"><i>房产</i><b class="${estate ? "" : "muted"}">${estate ? fmt(estate) : "—"}</b></span>
+        <span class="pkv"><i>持股</i><b class="${lots ? "" : "muted"}" title="${lots ? `市值 ${fmt(stockValue(p))} 万` : "未持股"}">${holding}</b></span>
+      </div>`;
     box.appendChild(d);
   });
 
