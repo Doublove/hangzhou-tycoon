@@ -12,13 +12,16 @@
     --red:#B3261E; --green:#1B7A3E;
   }
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-  html,body{height:100%}
+  html{height:100%}
   body{
     font-family:"PingFang SC","Microsoft YaHei",system-ui,-apple-system,sans-serif;
     background:var(--paper); color:var(--ink);
+    min-height:100%;
     display:flex; justify-content:center; padding:8px; overflow-x:hidden;
   }
   #app{width:100%;max-width:430px;display:flex;flex-direction:column;gap:7px}
+  /* 竖屏靠页面滚动承载高度，任何区块都不允许被 flex 压扁 */
+  #app > *{flex:0 0 auto}
 
   /* HUD */
   #hud{background:#fff;border:2px solid var(--line);border-radius:14px;padding:8px 10px;box-shadow:0 2px 0 var(--line)}
@@ -73,7 +76,9 @@
   .chip.legacy.empty{opacity:.6;background:#F2EDE3}
 
   /* 棋盘 */
-  #boardWrap{position:relative;width:100%;aspect-ratio:1/1;background:#fff;
+  #boardWrap{position:relative;width:100%;aspect-ratio:1/1;
+             min-width:240px;min-height:240px;flex:0 0 auto;
+             background:#fff;
              border:2px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:0 2px 0 var(--line)}
   .ring{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
         border:1.5px dashed #E6DCC8;border-radius:50%}
@@ -331,7 +336,7 @@
 <div class="toast" id="toast"></div>
 <div id="tip"></div>
 
-<script src="data.js?v=1.7.0"></script>
-<script src="game.js?v=1.7.0"></script>
+<script src="data.js?v=1.7.1"></script>
+<script src="game.js?v=1.7.1"></script>
 </body>
 </html>

@@ -4,7 +4,7 @@
 
 **在线试玩：** https://doublove.github.io/hangzhou-tycoon/
 **仓库：** https://github.com/Doublove/hangzhou-tycoon
-**当前版本：** v1.7.0 ｜ 变更记录见 [CHANGELOG.md](./CHANGELOG.md)
+**当前版本：** v1.7.1 ｜ 变更记录见 [CHANGELOG.md](./CHANGELOG.md)
 
 ---
 
@@ -102,7 +102,7 @@
 | 存档 | 1 个自动档 + 3 个手动档（localStorage），刷新可续玩 |
 | 证券 K 线栏 | 顶部常驻，月度蜡烛（涨红跌绿）、金色三角标出每次买入的时点与价格，实时显示持仓、市值与盈亏比例 |
 | 实时排名 | 玩家卡片左侧显示净资产名次，1—3 名金银铜配色，破产者显示「—」 |
-| 响应式布局 | 手机单列；≥760px 转两列（左信息、右棋盘，棋盘吸顶）；≥1180px 放大棋盘与格子 |
+| 响应式布局 | 手机单列（棋盘恒为正方形、不被压缩）；≥760px 转两列（左信息、右棋盘，棋盘吸顶）；≥1180px 放大棋盘与格子 |
 
 ---
 
@@ -212,7 +212,7 @@ python -m http.server 8080
 
 ## 自动化测试
 
-256 条用例覆盖地图、经济、回合、事件卡牌、道具、技能、破产、存档、悬浮说明、证券排名与整局不变量。测试直接加载 `data.js` / `game.js` 本体，不维护第二份逻辑。
+267 条用例覆盖地图、经济、回合、事件卡牌、道具、技能、破产、存档、悬浮说明、证券排名、布局契约与整局不变量。测试直接加载 `data.js` / `game.js` 本体，不维护第二份逻辑。
 
 ```bash
 npm test            # 全部用例，约 16 秒
@@ -235,6 +235,7 @@ npm run test:doc    # 重新生成 tests/测试用例.md
 | 存档与读档 | 12 | `tests/save.test.js` |
 | HUD 悬浮说明 | 26 | `tests/tooltip.test.js` |
 | 证券与排名 | 24 | `tests/stock.test.js` |
+| 布局契约 | 11 | `tests/layout.test.js` |
 | 整局不变量 | 10 | `tests/balance.test.js` |
 
 完整用例清单与需求追溯见 [`tests/测试用例.md`](./tests/测试用例.md)。

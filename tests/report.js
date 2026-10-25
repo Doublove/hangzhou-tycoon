@@ -22,6 +22,7 @@ const MODULES = [
   { prefix: 'SAVE',  file: 'save.test.js',     name: '存档与读档' },
   { prefix: 'TIP',   file: 'tooltip.test.js',  name: 'HUD 悬浮说明' },
   { prefix: 'STK',   file: 'stock.test.js',    name: '证券与排名' },
+  { prefix: 'LAY',   file: 'layout.test.js',   name: '布局契约' },
   { prefix: 'BAL',   file: 'balance.test.js',  name: '整局不变量' },
 ];
 
@@ -57,6 +58,7 @@ const MATRIX = [
   ['10.4 账号与存档',    '版本号、往返一致、坏档容错', 'TC-SAVE-01~12'],
   ['9.2 / 9.4 界面与交互', '政策条、旧环资产、技能按钮的悬浮说明', 'TC-TIP-01~26'],
   ['9.2 / 9.3 信息架构', '证券 K 线、持仓盈亏、实时排名、响应式布局', 'TC-STK-01~20, TC-RANK-01~04'],
+  ['9.1 屏幕与适配', '棋盘不被压缩、断点、涨跌配色', 'TC-LAY-01~11'],
 ];
 
 function extract() {
