@@ -83,6 +83,195 @@ const monthLabel = m => `${2010 + Math.floor(m / 12)} 年 ${(m % 12) + 1} 月`;
 const curCh = () => CHAPTERS[state.chapter];
 const chapterMonth = () => state.absMonth - curCh().from;
 
+
+/* ---------------- 建筑图标（等距渲染） ----------------
+   六个等级一套，统一 64×64、底部对齐 y=56，保证换级时体量可比。
+   用 data URI 注入 CSS 变量，格子通过 data-lv 取图。
+----------------------------------------------------- */
+const BUILDING_SVG = {
+  /* Lv0 空地：围挡 + 杂草 */
+  0: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+    <ellipse cx="32" cy="52" rx="19" ry="6" fill="#000" opacity=".10"/>
+    <polygon points="14,42 32,32 50,42 32,52" fill="#C9B48C"/>
+    <polygon points="14,42 32,52 32,55 14,45" fill="#A98F66"/>
+    <polygon points="32,52 50,42 50,45 32,55" fill="#BBA275"/>
+    <g stroke="#8C6A4A" stroke-width="2.2" stroke-linecap="round">
+      <path d="M18 38v10M26 34v10M40 34v10M48 38v10"/>
+      <path d="M18 41l30-10M18 45l30-10" stroke-width="1.6" opacity=".8"/>
+    </g>
+    <g fill="#6B8E4E"><circle cx="22" cy="49" r="1.6"/><circle cx="27" cy="51" r="1.3"/><circle cx="43" cy="49" r="1.5"/></g>
+  </svg>`,
+  /* Lv1 单间平房 */
+  1: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+    <ellipse cx="32" cy="54" rx="17" ry="5" fill="#000" opacity=".12"/>
+    <polygon points="17,40 32,47 32,56 17,49" fill="#D8C7A6"/>
+    <polygon points="32,47 47,40 47,49 32,56" fill="#EADCC0"/>
+    <polygon points="17,40 32,33 47,40 32,47" fill="#8C5A44"/>
+    <polygon points="17,40 32,33 32,35 17,42" fill="#6E4534"/>
+    <polygon points="29,50 35,53 35,56 29,53" fill="#5C4033"/>
+    <rect x="21" y="44" width="4" height="4" fill="#7FA8C9" transform="skewY(26) translate(0,-12)"/>
+  </svg>`,
+  /* Lv2 两层平房 */
+  2: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+    <ellipse cx="32" cy="55" rx="17" ry="5" fill="#000" opacity=".12"/>
+    <polygon points="18,32 32,39 32,56 18,49" fill="#D8C7A6"/>
+    <polygon points="32,39 46,32 46,49 32,56" fill="#EADCC0"/>
+    <polygon points="18,32 32,25 46,32 32,39" fill="#8C5A44"/>
+    <g fill="#5C7A96">
+      <polygon points="22,36 27,38.5 27,42 22,39.5"/>
+      <polygon points="36,41 42,38 42,41.5 36,44.5"/>
+      <polygon points="22,44 27,46.5 27,50 22,47.5"/>
+      <polygon points="36,49 42,46 42,49.5 36,52.5"/>
+    </g>
+    <polygon points="29,50 35,53 35,56 29,53" fill="#5C4033"/>
+  </svg>`,
+  /* Lv3 公寓楼 */
+  3: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+    <ellipse cx="32" cy="56" rx="15" ry="4.5" fill="#000" opacity=".12"/>
+    <polygon points="21,16 32,22 32,56 21,50" fill="#DCD5C6"/>
+    <polygon points="32,22 43,16 43,50 32,56" fill="#EFE9DC"/>
+    <polygon points="21,16 32,10 43,16 32,22" fill="#8C8477"/>
+    <g fill="#5C7A96">
+      <polygon points="24,22 29,24.5 29,27 24,24.5"/>
+      <polygon points="35,24.5 40,22 40,24.5 35,27"/>
+      <polygon points="24,30 29,32.5 29,35 24,32.5"/>
+      <polygon points="35,32.5 40,30 40,32.5 35,35"/>
+      <polygon points="24,38 29,40.5 29,43 24,40.5"/>
+      <polygon points="35,40.5 40,38 40,40.5 35,43"/>
+      <polygon points="24,46 29,48.5 29,51 24,48.5"/>
+      <polygon points="35,48.5 40,46 40,48.5 35,51"/>
+    </g>
+    <polygon points="29,50 35,53 35,56 29,53" fill="#4A5560"/>
+  </svg>`,
+  /* Lv4 写字楼 */
+  4: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+    <ellipse cx="32" cy="57" rx="14" ry="4" fill="#000" opacity=".14"/>
+    <polygon points="23,8 32,13 32,57 23,52" fill="#8FB6D4"/>
+    <polygon points="32,13 41,8 41,52 32,57" fill="#BBD8EC"/>
+    <polygon points="23,8 32,3 41,8 32,13" fill="#E4F1F9"/>
+    <g stroke="#3A4A5A" stroke-width="1" opacity=".55">
+      <path d="M23 16l18-9M23 24l18-9M23 32l18-9M23 40l18-9M23 48l18-9"/>
+      <path d="M27 5.5v50M36 9.5v50" stroke-width=".8"/>
+    </g>
+    <polygon points="29,52 35,55 35,57 29,54" fill="#2E3A45"/>
+  </svg>`,
+  /* Lv5 商业综合体 */
+  5: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+    <ellipse cx="32" cy="57" rx="21" ry="5" fill="#000" opacity=".14"/>
+    <polygon points="12,40 32,50 32,57 12,47" fill="#6E7C88"/>
+    <polygon points="32,50 52,40 52,47 32,57" fill="#8B99A6"/>
+    <polygon points="12,40 32,30 52,40 32,50" fill="#B6C3CE"/>
+    <polygon points="20,24 27,27.5 27,44 20,40.5" fill="#8FA9BE"/>
+    <polygon points="27,27.5 34,24 34,40.5 27,44" fill="#C3D8E8"/>
+    <polygon points="20,24 27,20.5 34,24 27,27.5" fill="#E8B23A"/>
+    <polygon points="36,18 42,21 42,44 36,41" fill="#8FA9BE"/>
+    <polygon points="42,21 48,18 48,41 42,44" fill="#C3D8E8"/>
+    <polygon points="36,18 42,15 48,18 42,21" fill="#E8B23A"/>
+    <g fill="#F2D27A" opacity=".9">
+      <polygon points="16,44 22,47 22,49 16,46"/>
+      <polygon points="38,46 44,43 44,45 38,48"/>
+    </g>
+  </svg>`,
+};
+
+
+/* ---------------- 地铁线网（棋盘底图） ----------------
+   四张简化线网，对应各章结束年份：2013 / 2017 / 2021 / 2026。
+   只画走向与站点，不求精确；线网密度随年份递增，用来表达"城市在长大"。
+----------------------------------------------------- */
+const METRO_SVG = [
+  /* 2013：1 号线 */
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">
+    <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="150,30 150,120 175,175 175,250 205,300 205,370" stroke="#C8102E" stroke-width="7"/>
+    </g>
+    <g fill="#C8102E">
+      <circle cx="150" cy="30" r="5"/><circle cx="150" cy="75" r="5"/><circle cx="150" cy="120" r="5"/>
+      <circle cx="175" cy="175" r="5"/><circle cx="175" cy="215" r="5"/><circle cx="175" cy="250" r="5"/>
+      <circle cx="205" cy="300" r="5"/><circle cx="205" cy="370" r="5"/>
+    </g>
+  </svg>`,
+  /* 2017：1 / 2 / 4 号线 */
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">
+    <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="150,30 150,120 175,175 175,250 205,300 205,370" stroke="#C8102E" stroke-width="7"/>
+      <polyline points="40,300 130,300 190,240 250,240 330,180" stroke="#E57200" stroke-width="7"/>
+      <polyline points="60,120 130,120 190,180 190,260 240,310 340,310" stroke="#00954C" stroke-width="7"/>
+    </g>
+    <g fill="#C8102E"><circle cx="150" cy="30" r="5"/><circle cx="150" cy="120" r="5"/><circle cx="175" cy="175" r="5"/><circle cx="175" cy="250" r="5"/><circle cx="205" cy="370" r="5"/></g>
+    <g fill="#E57200"><circle cx="40" cy="300" r="5"/><circle cx="130" cy="300" r="5"/><circle cx="190" cy="240" r="5"/><circle cx="250" cy="240" r="5"/><circle cx="330" cy="180" r="5"/></g>
+    <g fill="#00954C"><circle cx="60" cy="120" r="5"/><circle cx="130" cy="120" r="5"/><circle cx="190" cy="180" r="5"/><circle cx="240" cy="310" r="5"/><circle cx="340" cy="310" r="5"/></g>
+  </svg>`,
+  /* 2021：1 / 2 / 4 / 5 / 6 / 7 / 9 / 16 号线 */
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">
+    <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="150,30 150,120 175,175 175,250 205,300 205,370" stroke="#C8102E" stroke-width="6"/>
+      <polyline points="40,300 130,300 190,240 250,240 330,180" stroke="#E57200" stroke-width="6"/>
+      <polyline points="60,120 130,120 190,180 190,260 240,310 340,310" stroke="#00954C" stroke-width="6"/>
+      <polyline points="30,200 120,200 180,140 250,140 300,90" stroke="#00A0E9" stroke-width="6"/>
+      <polyline points="100,370 160,310 220,310 280,250 340,250" stroke="#6D2077" stroke-width="6"/>
+      <polyline points="70,60 140,60 200,110 260,110 330,60" stroke="#F2A900" stroke-width="6"/>
+      <polyline points="240,30 240,110 280,160 280,240 320,290" stroke="#8DC63F" stroke-width="6"/>
+      <polyline points="350,120 300,160 300,240 260,290 260,370" stroke="#00B5AD" stroke-width="6"/>
+    </g>
+    <g fill="#C8102E"><circle cx="150" cy="30" r="4"/><circle cx="150" cy="120" r="4"/><circle cx="175" cy="175" r="4"/><circle cx="175" cy="250" r="4"/><circle cx="205" cy="370" r="4"/></g>
+    <g fill="#E57200"><circle cx="40" cy="300" r="4"/><circle cx="130" cy="300" r="4"/><circle cx="190" cy="240" r="4"/><circle cx="330" cy="180" r="4"/></g>
+    <g fill="#00954C"><circle cx="60" cy="120" r="4"/><circle cx="190" cy="180" r="4"/><circle cx="240" cy="310" r="4"/><circle cx="340" cy="310" r="4"/></g>
+    <g fill="#00A0E9"><circle cx="30" cy="200" r="4"/><circle cx="120" cy="200" r="4"/><circle cx="180" cy="140" r="4"/><circle cx="300" cy="90" r="4"/></g>
+    <g fill="#6D2077"><circle cx="100" cy="370" r="4"/><circle cx="160" cy="310" r="4"/><circle cx="280" cy="250" r="4"/><circle cx="340" cy="250" r="4"/></g>
+    <g fill="#F2A900"><circle cx="70" cy="60" r="4"/><circle cx="140" cy="60" r="4"/><circle cx="260" cy="110" r="4"/><circle cx="330" cy="60" r="4"/></g>
+    <g fill="#8DC63F"><circle cx="240" cy="30" r="4"/><circle cx="280" cy="160" r="4"/><circle cx="320" cy="290" r="4"/></g>
+    <g fill="#00B5AD"><circle cx="350" cy="120" r="4"/><circle cx="300" cy="160" r="4"/><circle cx="260" cy="370" r="4"/></g>
+  </svg>`,
+  /* 2026：在 2021 基础上加密 */
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">
+    <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="150,30 150,120 175,175 175,250 205,300 205,370" stroke="#C8102E" stroke-width="6"/>
+      <polyline points="40,300 130,300 190,240 250,240 330,180" stroke="#E57200" stroke-width="6"/>
+      <polyline points="60,120 130,120 190,180 190,260 240,310 340,310" stroke="#00954C" stroke-width="6"/>
+      <polyline points="30,200 120,200 180,140 250,140 300,90" stroke="#00A0E9" stroke-width="6"/>
+      <polyline points="100,370 160,310 220,310 280,250 340,250" stroke="#6D2077" stroke-width="6"/>
+      <polyline points="70,60 140,60 200,110 260,110 330,60" stroke="#F2A900" stroke-width="6"/>
+      <polyline points="240,30 240,110 280,160 280,240 320,290" stroke="#8DC63F" stroke-width="6"/>
+      <polyline points="350,120 300,160 300,240 260,290 260,370" stroke="#00B5AD" stroke-width="6"/>
+      <polyline points="20,120 90,180 160,180 220,220 290,220 370,270" stroke="#B5A0D0" stroke-width="5"/>
+      <polyline points="90,30 150,90 150,160 110,200 110,280" stroke="#FF8A65" stroke-width="5"/>
+      <polyline points="270,60 230,120 230,200 270,240 350,240" stroke="#7E9A3C" stroke-width="5"/>
+      <polyline points="30,350 100,280 170,280 230,340 320,340" stroke="#5C6BC0" stroke-width="5"/>
+    </g>
+    <g fill="#C8102E"><circle cx="150" cy="30" r="4"/><circle cx="150" cy="120" r="4"/><circle cx="175" cy="175" r="4"/><circle cx="175" cy="250" r="4"/><circle cx="205" cy="370" r="4"/></g>
+    <g fill="#E57200"><circle cx="40" cy="300" r="4"/><circle cx="130" cy="300" r="4"/><circle cx="190" cy="240" r="4"/><circle cx="330" cy="180" r="4"/></g>
+    <g fill="#00954C"><circle cx="60" cy="120" r="4"/><circle cx="190" cy="180" r="4"/><circle cx="240" cy="310" r="4"/><circle cx="340" cy="310" r="4"/></g>
+    <g fill="#00A0E9"><circle cx="30" cy="200" r="4"/><circle cx="120" cy="200" r="4"/><circle cx="180" cy="140" r="4"/><circle cx="300" cy="90" r="4"/></g>
+    <g fill="#6D2077"><circle cx="100" cy="370" r="4"/><circle cx="160" cy="310" r="4"/><circle cx="280" cy="250" r="4"/><circle cx="340" cy="250" r="4"/></g>
+    <g fill="#F2A900"><circle cx="70" cy="60" r="4"/><circle cx="140" cy="60" r="4"/><circle cx="260" cy="110" r="4"/><circle cx="330" cy="60" r="4"/></g>
+    <g fill="#8DC63F"><circle cx="240" cy="30" r="4"/><circle cx="280" cy="160" r="4"/><circle cx="320" cy="290" r="4"/></g>
+    <g fill="#00B5AD"><circle cx="350" cy="120" r="4"/><circle cx="300" cy="160" r="4"/><circle cx="260" cy="370" r="4"/></g>
+    <g fill="#B5A0D0"><circle cx="20" cy="120" r="4"/><circle cx="90" cy="180" r="4"/><circle cx="220" cy="220" r="4"/><circle cx="370" cy="270" r="4"/></g>
+    <g fill="#FF8A65"><circle cx="90" cy="30" r="4"/><circle cx="150" cy="90" r="4"/><circle cx="110" cy="280" r="4"/></g>
+    <g fill="#7E9A3C"><circle cx="270" cy="60" r="4"/><circle cx="230" cy="200" r="4"/><circle cx="350" cy="240" r="4"/></g>
+    <g fill="#5C6BC0"><circle cx="30" cy="350" r="4"/><circle cx="170" cy="280" r="4"/><circle cx="320" cy="340" r="4"/></g>
+  </svg>`,
+];
+
+function injectMetroAssets(){
+  const root = document.documentElement;
+  if (!root || !root.style) return;
+  METRO_SVG.forEach((svg, i) => {
+    root.style.setProperty(`--metro${i}`,
+      `url("data:image/svg+xml,${encodeURIComponent(svg)}")`);
+  });
+}
+
+function injectBuildingAssets(){
+  const root = document.documentElement;
+  if (!root || !root.style) return;
+  Object.keys(BUILDING_SVG).forEach(lv => {
+    root.style.setProperty(`--bld${lv}`,
+      `url("data:image/svg+xml,${encodeURIComponent(BUILDING_SVG[lv])}")`);
+  });
+}
+
 /* ---------------- 建盘 ---------------- */
 function buildRings(){
   state.rings = RINGS.map((ring, ri) => {
@@ -502,7 +691,7 @@ function drawKline(cv, hist, p){
   lo -= pad; hi += pad;
   const yOf = v => padT + (hi - v) / (hi - lo) * (h - padT - padB);
 
-  g.strokeStyle = "#EDE5D6";
+  g.strokeStyle = "rgba(255,255,255,.09)";
   g.lineWidth = 1;
   for (let i = 1; i <= 2; i++){
     const yy = padT + (h - padT - padB) * i / 3;
@@ -514,7 +703,7 @@ function drawKline(cv, hist, p){
   hist.forEach((d, i) => {
     const x = padL + bw * i + bw / 2;
     const up = d.c >= d.o;
-    const color = up ? "#C0392B" : "#1B7A3E";
+    const color = up ? "#FF4D3D" : "#12D68A";
     g.fillStyle = color;
     g.strokeStyle = color;
     const top = yOf(Math.max(d.o, d.c));
@@ -535,13 +724,13 @@ function drawKline(cv, hist, p){
       const at = lot.idx != null ? lot.idx : lot.price * 10;
       /* 买入价贴顶时把标记压回绘图区，别画到画布外 */
       const yy = Math.max(padT + 9, Math.min(h - padB - 2, yOf(at)));
-      g.strokeStyle = "rgba(184,134,11,.55)";
+      g.strokeStyle = "rgba(232,178,58,.55)";
       g.lineWidth = 1;
       g.setLineDash([3, 2]);
       g.beginPath(); g.moveTo(x, yy); g.lineTo(w, yy); g.stroke();
       g.setLineDash([]);
-      g.fillStyle = "#B8860B";
-      g.strokeStyle = "#fff";
+      g.fillStyle = "#E8B23A";
+      g.strokeStyle = "#0A0B0D";
       g.lineWidth = 1.5;
       g.beginPath();
       g.moveTo(x, yy - 3);
@@ -620,6 +809,8 @@ function onCellClick(cell){
 
 function renderBoard(){
   const wrap = $("#boardWrap");
+  /* 底图换成当前章节结束年份的地铁线网 */
+  wrap.style.setProperty("--metro", `var(--metro${state.chapter})`);
   wrap.querySelectorAll(".cell,.token,.oldring").forEach(n => n.remove());
   const cells = curCells();
   const n = cells.length, R = 43;
@@ -643,7 +834,7 @@ function renderBoard(){
     el.style.top = (50 + R * Math.sin(a)) + "%";
     el.onclick = () => onCellClick(cell);
     el.innerHTML = cell.t === "plot"
-      ? `<span class="nm">${cell.name}</span><span class="lv"></span><span class="bar"></span>`
+      ? `<span class="bld" data-lv="${cell.lv}"></span><span class="nm">${cell.name}</span><span class="bar"></span>`
       : `<span class="nm">${cell.name}</span>`;
     wrap.appendChild(el);
   });
@@ -666,11 +857,13 @@ function renderCells(){
     el.classList.toggle("chain", chained);
     el.dataset.chain = chained ? "×2" : "";
     el.style.background = chained ? cell.owner.color + "1F" : "";
-    el.querySelector(".lv").textContent = cell.lv ? "●".repeat(cell.lv) : "";
+    const bld = el.querySelector(".bld");
+    if (bld) bld.dataset.lv = cell.lv;
     const bar = el.querySelector(".bar");
     if (cell.owner){
       el.classList.add("owned");
       el.style.setProperty("--owner", cell.owner.color);
+      el.style.setProperty("--owner-soft", cell.owner.color + "66");
       bar.style.background = cell.owner.color;
     } else {
       el.classList.remove("owned");
@@ -2280,6 +2473,8 @@ $("#roll").addEventListener("click", () => {
 });
 $("#menu").addEventListener("click", () => { if (state.started) openMenu(); });
 
+injectBuildingAssets();
+injectMetroAssets();
 buildRings();
 state.players = [];
 render();
