@@ -782,11 +782,19 @@ function renderBoard(){
   const wrap = $("#boardWrap");
   /* 底图换成当前章节结束年份的地铁线网 */
   wrap.style.setProperty("--metro", `var(--metro${state.chapter})`);
-  wrap.querySelectorAll(".cell,.token,.oldring,.bslot,.jailwire,.chainlink").forEach(n => n.remove());
+  wrap.querySelectorAll(".cell,.token,.oldring,.bslot,.bband,.jailwire,.chainlink").forEach(n => n.remove());
   const cells = curCells();
 
   /* 旧环不再画成内嵌圆环：方形棋盘里圆形只会干扰视线，
      已沉降环的信息在 HUD 的「旧环资产」里给出。 */
+
+  /* 建筑带底板：上下左右四条浅色带，让建筑槽站在一片干净的底上，
+     而不是直接压在棋盘纹理上（对应示意图里紫框所在的白区） */
+  ["top", "bottom", "left", "right"].forEach(side => {
+    const b = document.createElement("div");
+    b.className = "bband " + side;
+    wrap.appendChild(b);
+  });
 
   /* 建筑槽：每个地块外侧紧邻的一格，常驻。
      空地是虚线空框，买入并建房后槽里出现对应等级的房子。
@@ -846,9 +854,7 @@ function renderCells(){
     if (cell.owner){
       el.classList.add("owned");
       el.style.setProperty("--owner", cell.owner.color);
-      /* 40% 的归属色在米色格子上偏淡，青/蓝系几乎看不出来；
-         提到 60% 后四个玩家的颜色才分得开 */
-      el.style.setProperty("--owner-soft", cell.owner.color + "99");
+      el.style.setProperty("--owner-soft", cell.owner.color + "66");
       bar.style.background = cell.owner.color;
     } else {
       el.classList.remove("owned");
