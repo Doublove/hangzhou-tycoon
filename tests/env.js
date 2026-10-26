@@ -15,6 +15,7 @@ const vm = require('node:vm');
 
 const SITE_DIR = path.resolve(__dirname, '..');
 const DATA_SRC = fs.readFileSync(path.join(SITE_DIR, 'data.js'), 'utf8');
+const CONFIG_JSON = JSON.parse(fs.readFileSync(path.join(SITE_DIR, 'config.json'), 'utf8'));
 const GAME_SRC = fs.readFileSync(path.join(SITE_DIR, 'game.js'), 'utf8');
 
 /* ---------------- 最小 DOM 桩 ---------------- */
@@ -208,6 +209,8 @@ const EXPORTS = [
   'curRegions', 'hottestRegions', 'shopPrice', 'askShop', 'enterShop',
   'WALK_LEN', 'JAIL_IDX', 'JAIL_EXIT', 'RING_GRID', 'gridOf', 'cellCenter', 'slotOf',
   'BUILDING_SVG', 'playerShades', 'tintSvg', 'hexToHsl', 'hslToHex',
+  'applyFx', 'runOp', 'buildDeck', 'drawFromDeck', 'shuffle', 'drawCard',
+  'applyConfig', 'loadConfig', 'CONFIG',
   'eraF', 'heatF', 'value', 'rentOf', 'neighbors', 'adjacentBonus', 'adjCount', 'sandwichedOwner',
   'tollParts', 'tollOf', 'leverage', 'cappedFor', 'tollFor', 'upCost', 'estateValue', 'netWorth', 'loanCap', 'loanRate',
   'hasPolicy', 'setPolicy', 'extendPolicy', 'clearPolicy', 'heatAdd', 'raiseCap', 'triggerStall',
@@ -269,6 +272,8 @@ function createEnv(options = {}) {
   sandbox.window = sandbox;
   sandbox.globalThis = sandbox;
   sandbox.self = sandbox;
+  /* 配置以对象形式直接注入，boot() 会同步应用，测试不需要起 HTTP 服务 */
+  sandbox.__CONFIG__ = CONFIG_JSON;
 
   const ctx = vm.createContext(sandbox);
   vm.runInContext('Math.random = __rand;', ctx, { filename: 'random-patch.js' });

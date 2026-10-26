@@ -1744,9 +1744,207 @@ async function lotteryCheck(p, c){
   return win;
 }
 
+/* ---------------- 卡牌效果解释器 ----------------
+   config.json 里每张卡用 fx 数组声明效果（可多条，按顺序执行），
+   事件卡也用同一套。加卡、调数值只改配置，不用动代码。
+
+   op 一览：
+     cash      现金增减（kind: flat/perPlot/perLevel/plotValuePct/perEmptyPlot）
+     debt      负债增减
+     flag      设置玩家标记（freePass / risk / vision / bridge / skipBuy）
+     revalue   估值系数
+     upgrade   随机一块自有地块升一级
+     buyPlot   折扣买入无主地块
+     heat      热度变化（regions 指定 / target: curRandom / curHottest / 省略=全城）
+     jail      送进监狱
+     policy    设置或延长政策
+     clearPolicy  解除政策
+     stock     股价乘数
+     boost     地块租金倍率（pick: randomRented / allLv1 / mostExpensive / first）
+     repair    修复一块烂尾地块
+     discount  地块估值折扣（pick: first）
+     forceSell 负债超限时强制卖地
+     cashToPoorest  给现金最少的玩家发钱
+     raiseCap  提升区域等级上限
+     freezeBuy / freezeRegion  冻结交易
+     stall     触发烂尾判定
+----------------------------------------------------- */
+
+function fxNum(v){ return Array.isArray(v) ? v[rnd(v.length)] : (v == null ? 0 : v); }
+
+function runOp(f, p){
+  const v = fxNum(f.v);
+  switch (f.op){
+    case "cash": {
+      if (f.when === "hasPlot" && !owned(p).length) return "无房一身轻";
+      let amount = v;
+      if (f.kind === "perPlot") amount = v * owned(p).length;
+      else if (f.kind === "perLevel"){
+        const list = owned(p).filter(c => !f.regions || f.regions.includes(c.region));
+        amount = v * list.reduce((s, c) => s + c.lv, 0);
+      } else if (f.kind === "plotValuePct"){
+        amount = Math.round(owned(p).reduce((s, c) => s + value(c), 0) * v);
+      } else if (f.kind === "perEmptyPlot"){
+        amount = v * owned(p).filter(c => c.lv === 0).length;
+      }
+      p.cash += amount;
+      if (!amount) return f.kind ? "没有可计算的地块" : "现金不变";
+      return amount > 0 ? `现金 +${fmt(amount)} 万` : `现金 −${fmt(-amount)} 万`;
+    }
+    case "debt":
+      p.debt += v;
+      return v > 0 ? `借入 ${fmt(v)} 万（仍计负债）` : `负债 −${fmt(-v)} 万`;
+
+    case "flag":
+      p[f.key] = v;
+      return { freePass: "本回合买地免摇号", risk: "埋下舆情风险",
+               vision: `获得 ${v} 个月视野`, bridge: `获得过桥资金 ${v} 个月`,
+               skipBuy: "本回合不能买地" }[f.key] || `${f.key} = ${v}`;
+
+    case "revalue":
+      p.revalue = v;
+      return v >= 1 ? `名下地块估值 +${Math.round((v - 1) * 100)}%` : `估值 −${Math.round((1 - v) * 100)}%`;
+
+    case "upgrade": {
+      const list = owned(p).filter(x => x.lv < x.maxLv && !x.broken);
+      if (!list.length) return "没有可升级的地块";
+      const one = list[rnd(list.length)];
+      one.lv++;
+      return `${one.name} 免费升到 Lv${one.lv}`;
+    }
+    case "buyPlot": {
+      const free = allCells().filter(c => c.t === "plot" && !c.owner && c.unlocked && !c.broken);
+      if (!free.length) return "没有可买的地块";
+      const c = free[rnd(free.length)];
+      const cost = Math.round(value(c) * (f.discount == null ? 1 : f.discount));
+      if (p.cash < cost) return "现金不够，错过机会";
+      p.cash -= cost; c.owner = p; c.lv = 1; c.boughtAt = state.absMonth;
+      const zhe = f.discount == null ? "" : `${Math.round(f.discount * 10)} 折（`;
+      return `${c.name} 以 ${zhe}${fmt(cost)} 万）买下`;
+    }
+    case "heat": {
+      let list;
+      if (f.regions) list = f.regions;
+      else if (f.target === "curRandom") list = [pick(curRegions())];
+      else if (f.target === "curHottest") list = hottestRegions(f.n || 2);
+      else list = null;
+      heatAdd(list, v);
+      return list ? `${list.join("、")} 热度 ${v > 0 ? "+" : ""}${v}`
+                  : `全城热度 ${v > 0 ? "+" : ""}${v}`;
+    }
+    case "jail":
+      sendToJail(p);
+      return "被带走调查，进了监狱";
+
+    case "policy":
+      if (f.extend && hasPolicy(f.key)) extendPolicy(f.key, f.extend);
+      else setPolicy(f.key, state.absMonth + (f.months || 6));
+      return "政策生效";
+    case "clearPolicy":
+      clearPolicy(f.key);
+      return "相关政策解除";
+
+    case "stock":
+      state.stockPrice = Math.max(200, Math.round(state.stockPrice * f.mult));
+      return `指数跌到 ${fmt(state.stockPrice)}`;
+
+    case "boost": {
+      let target = [];
+      if (f.pick === "allLv1") target = owned(p).filter(x => x.lv === 1);
+      else if (f.pick === "randomRented"){
+        const list = owned(p).filter(x => x.lv > 0);
+        if (list.length) target = [list[rnd(list.length)]];
+      } else if (f.pick === "mostExpensive"){
+        const c = owned(p).slice().sort((a, b) => value(b) - value(a))[0];
+        if (c) target = [c];
+      } else if (f.pick === "first"){
+        const c = owned(p)[0];
+        if (c) target = [c];
+      }
+      if (!target.length) return "没有可影响的地块";
+      target.forEach(c => { c.boost = v; });
+      const names = target.map(c => c.name).join("、");
+      return v > 0 ? `${names} 租金翻倍 ${v} 个月` : `${names} 暂停收租 ${-v} 个月`;
+    }
+    case "repair": {
+      const list = allCells().filter(c => c.broken && c.owner === p);
+      if (!list.length) return "没有烂尾地块";
+      list[0].broken = false;
+      return `${list[0].name} 恢复交付`;
+    }
+    case "discount": {
+      const c = owned(p)[0];
+      if (!c) return "没有地块";
+      c.discount = f.v;
+      return `${c.name} 估值下调`;
+    }
+    case "forceSell": {
+      if (f.when === "debtOverHalf" && p.debt > netWorth(p) * 0.5 && owned(p).length){
+        const c = owned(p).sort((a, b) => value(a) - value(b))[0];
+        sellLand(p, c);
+        return `${c.name} 被强制处置`;
+      }
+      return "暂未触及红线";
+    }
+    case "cashToPoorest": {
+      const poor = state.players.filter(x => !x.bankrupt).sort((a, b) => a.cash - b.cash)[0];
+      if (!poor) return "";
+      poor.cash += v;
+      return `${poor.name} 获得补贴 ${fmt(v)} 万`;
+    }
+    case "raiseCap":
+      raiseCap(f.regions);
+      return `${(f.regions || []).join("、")} 等级上限 +1`;
+
+    case "freezeBuy":
+      state.freezeBuy = f.months || 1;
+      return `交易冻结 ${f.months || 1} 个月`;
+    case "freezeRegion":
+      state.freezeRegion = { region: f.region, until: state.absMonth + (f.months || 3) };
+      return `${f.region} 暂停交易`;
+
+    case "stall":
+      triggerStall();
+      return "部分工地出现烂尾";
+
+    default:
+      return "";
+  }
+}
+
+/* p 为空表示这是全局事件，不针对某个玩家 */
+function applyFx(fx, p){
+  if (!Array.isArray(fx) || !fx.length) return "";
+  return fx.map(f => runOp(f, p || state.players[0] || {})).filter(Boolean).join("，");
+}
+
+/* ---------------- 牌堆 ----------------
+   卡池超过 deckSize（默认 25）时，每局只随机抽这么多张当牌堆，
+   抽完自动重洗 —— 一局里不会把 25 张全见完，也不会无限重复。
+----------------------------------------------------- */
+function shuffle(arr){
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function buildDeck(pool){
+  const size = CFG.deckSize || 25;
+  return shuffle(pool).slice(0, Math.min(size, pool.length));
+}
+
+function drawFromDeck(kind, pool){
+  if (!state.deck) state.deck = {};
+  if (!state.deck[kind] || !state.deck[kind].length) state.deck[kind] = buildDeck(pool);
+  return state.deck[kind].pop();
+}
+
 async function drawCard(p, deck, kind){
-  const card = deck[rnd(deck.length)];
-  const res = card.act(p);
+  const card = drawFromDeck(kind === "机会" ? "chance" : "fate", deck);
+  const res = applyFx(card.fx, p);
   log(`<b>${p.name}</b> 抽到【${kind}·${card.t}】：${res}`, String(res).includes("−") ? "bad" : "good");
   toast(`${kind} · ${card.t}`);
   renderHUD(); renderCells();
@@ -2178,7 +2376,7 @@ async function endMonth(){
   EVENTS.forEach(e => {
     if (e.m === state.absMonth && !state.fired[e.key]){
       state.fired[e.key] = true;
-      if (e.fn) e.fn();
+      if (e.fx) applyFx(e.fx);
       if (e.policy) setPolicy(e.key, e.until == null ? null : e.until);
       state.mods.push({
         key:e.key, kind:e.kind, name:e.name, detail:e.detail,
@@ -2308,6 +2506,11 @@ function serialize(){
     stockHistory: state.stockHistory || [],
     freezeBuy:state.freezeBuy, freezeRegion:state.freezeRegion,
     charId:state.charId, diff:state.diff,
+    /* 牌堆存卡名而不是整张卡：配置改数值后旧档仍能读，只是取到新数值 */
+    deck: state.deck ? {
+      chance: state.deck.chance.map(c => c.t),
+      fate: state.deck.fate.map(c => c.t),
+    } : null,
     cells: allCells().filter(c => c.t === "plot").map(c => ({
       ring:c.ring, idx:c.idx, lv:c.lv, owner:c.owner ? c.owner.id : null,
       unlocked:c.unlocked, boughtAt:c.boughtAt, broken:c.broken, boost:c.boost,
@@ -2350,6 +2553,16 @@ function restore(d){
     : [{ m: d.absMonth, o: d.stockPrice, c: d.stockPrice }];
   state.freezeRegion = d.freezeRegion || null;
   state.over = false; state.busy = false; state.started = true;
+  if (d.deck && Array.isArray(d.deck.chance)){
+    state.deck = {
+      chance: d.deck.chance.map(t => CHANCE.find(c => c.t === t)).filter(Boolean),
+      fate: (d.deck.fate || []).map(t => FATE.find(c => c.t === t)).filter(Boolean),
+    };
+    if (!state.deck.chance.length) state.deck.chance = buildDeck(CHANCE);
+    if (!state.deck.fate.length) state.deck.fate = buildDeck(FATE);
+  } else {
+    state.deck = { chance: buildDeck(CHANCE), fate: buildDeck(FATE) };
+  }
 
   state.players.forEach(p => {
     p.cash = 0; p.debt = 0; p.pos = 0; p.bankrupt = false;
@@ -2444,6 +2657,7 @@ function newGame(charId, diff, chapter){
   state.mods = []; state.fired = {}; state.stockPrice = 1000;
   state.stockHistory = [{ m: state.absMonth, o: 1000, c: 1000 }];
   state.freezeBuy = 0; state.freezeRegion = null;
+  state.deck = { chance: buildDeck(CHANCE), fate: buildDeck(FATE) };
 
   state.heat = {};
   Object.keys(REGIONS).forEach(k => state.heat[k] = REGIONS[k].heat);
@@ -2468,7 +2682,7 @@ function newGame(charId, diff, chapter){
 
   // 从中途章节开局：把此前发生过的事件补演一遍，保证热度、政策、等级上限与历史一致
   EVENTS.filter(e => e.m < state.absMonth).forEach(e => {
-    if (e.fn && e.key !== "covid") e.fn();
+    if (e.fx && e.key !== "covid") applyFx(e.fx);
     if (e.policy) setPolicy(e.key, e.until == null ? null : e.until);
     state.fired[e.key] = true;
   });
@@ -2532,15 +2746,37 @@ $("#roll").addEventListener("click", () => {
 });
 $("#menu").addEventListener("click", () => { if (state.started) openMenu(); });
 
-injectBuildingAssets();
-injectMetroAssets();
-buildRings();
-state.players = [];
-render();
-if (SIM){
-  const ch = +(new URLSearchParams(location.search).get("ch") || 0);
-  newGame("hang", "normal", ch);
-} else {
-  startScreen();
-  updateButton();
+/* 配置加载完才初始化：数据没到之前 buildRings / render 都跑不了 */
+function boot(){
+  const start = () => {
+    injectBuildingAssets();
+    injectMetroAssets();
+    buildRings();
+    state.players = [];
+    render();
+    if (SIM){
+      const ch = +(new URLSearchParams(location.search).get("ch") || 0);
+      newGame("hang", "normal", ch);
+    } else {
+      startScreen();
+      updateButton();
+    }
+  };
+
+  /* 测试与离线注入：配置已在内存里，直接同步起，不引入微任务时序 */
+  const preset = typeof globalThis !== "undefined" ? globalThis.__CONFIG__ : null;
+  if (preset && preset.cfg){
+    applyConfig(preset);
+    start();
+    return;
+  }
+
+  loadConfig().then(start).catch(err => {
+    document.body.innerHTML =
+      '<div style="padding:28px;font:14px/1.7 system-ui,sans-serif;color:#A3231A">' +
+      '<b>配置加载失败</b><br>' + String((err && err.message) || err) +
+      '<br><br>请确认 config.json 与 index.html 在同一目录，且通过 http 打开（file:// 会被浏览器拦）。' +
+      '</div>';
+  });
 }
+boot();

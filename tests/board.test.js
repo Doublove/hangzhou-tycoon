@@ -200,7 +200,7 @@ test('TC-MAP-18 机会卡与命运卡都能把人送进监狱', () => {
   const p = env.state.players[0];
   const jailCards = [...env.CHANCE, ...env.FATE].filter(c => {
     p.inJail = false; p.pos = 0;
-    c.act(p);
+    env.applyFx(c.fx, p);
     return p.inJail;
   });
   assert.ok(jailCards.length >= 2, `应有多张卡能触发进监狱，实际 ${jailCards.length}`);

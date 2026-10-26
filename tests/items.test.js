@@ -45,13 +45,18 @@ test('TC-ITEM-04 落在机会格有 35% 概率额外掉一件道具', async () =
   const chance = env.curCells().find(c => c.t === 'chance');
   const total = () => Object.values(p.items).reduce((a, b) => a + b, 0);
 
+  /* 牌堆固定成一张不消耗随机数的卡：抽到 upgrade / buyPlot / 随机热度
+     都会多走一次 rnd，把后面掉落判定的随机序列顶偏 */
+  const calm = env.CHANCE.find(c => c.t === '茶水费');
+  env.state.deck.chance = [calm, calm, calm];
+
   const before = total();
-  env.setRandom([0, 0, 0]);          // 抽卡 + 掉落判定 0 < 0.35 + 骰子
+  env.setRandom([0, 0]);             // 掉落判定 0 < 0.35
   await env.landOn(p, chance);
   assert.equal(total(), before + 1, '应掉落 1 件');
 
   const after = total();
-  env.setRandom([0, 0.5]);           // 0.5 > 0.35，不掉落
+  env.setRandom([0.5]);              // 0.5 > 0.35，不掉落
   await env.landOn(p, chance);
   assert.equal(total(), after, '未命中概率不应掉落');
 });

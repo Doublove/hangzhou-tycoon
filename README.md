@@ -215,6 +215,42 @@ python -m http.server 8080
 
 ---
 
+## 配置
+
+所有可调内容都在 **`config.json`**，键名与代码里的变量名一一对应：
+
+| 配置键 | 代码变量 | 内容 |
+|---|---|---|
+| `cfg` | `CFG` | 回合数、过路费上限、物业费、贷款利率、牌堆上限等数值 |
+| `era` | `ERA` | 2010—2026 逐年时代系数 |
+| `regions` | `REGIONS` | 12 个区域的颜色与基准热度 |
+| `items` / `itemKeys` | `ITEMS` / `ITEM_KEYS` | 四种道具的名称、图标、说明 |
+| `chars` | `CHARS` | 6 个角色的现金、技能、主动技 |
+| `diff` | `DIFF` | 三档 AI 的预留金、视野、噪声、杠杆 |
+| `rings` | `RINGS` | 四环共 64 个地块（名称、区域、楼面价、等级上限、解锁月） |
+| `trackPattern` | `TRACK_PATTERN` | 24 格的格位排列 |
+| `scenic` | `SCENIC` | 四章的风景区名称 |
+| `events` | `EVENTS` | 31 条历史事件（含效果 `fx`） |
+| `chance` / `fate` | `CHANCE` / `FATE` | 25 张机会卡、26 张命运卡（含效果 `fx`） |
+
+**加载方式**：`data.js` 只负责声明同名变量 + 启动时 `fetch` 一次 `config.json`，之后所有逻辑只读内存。改数值不用碰 JS，刷新页面即可生效。
+
+**卡牌效果用声明式 DSL**，加卡或调数值只改配置。可用 `op`：
+
+```
+cash / debt / flag / revalue / upgrade / buyPlot / heat / jail
+policy / clearPolicy / stock / boost / repair / discount / forceSell
+cashToPoorest / raiseCap / freezeBuy / freezeRegion / stall
+```
+
+例：`{ "t": "茶水费", "d": "现金 +60 万", "fx": [{ "op": "cash", "v": 60 }] }`
+
+**牌堆**：卡池超过 `cfg.deckSize`（默认 25）时，每局开始时随机抽 25 张当牌堆，抽完自动重洗；不足 25 张则全用。牌堆随存档保存，读档后不会重洗。
+
+> 必须通过 http 打开（`python -m http.server` 或线上 Pages）。`file://` 下浏览器会拦截 `fetch`，页面会给出提示。
+
+---
+
 ## 视觉
 
 深色主题 + F1 式硬朗排版，各区块按功能做拟物：
@@ -236,7 +272,7 @@ python -m http.server 8080
 
 ## 自动化测试
 
-305 条用例覆盖地图、经济、回合、事件卡牌、道具、技能、破产、存档、悬浮说明、证券排名、布局契约、玩家栏、道具商店与整局不变量。测试直接加载 `data.js` / `game.js` 本体，不维护第二份逻辑。
+317 条用例覆盖地图、经济、回合、事件卡牌、道具、技能、破产、存档、悬浮说明、证券排名、布局契约、玩家栏、道具商店与整局不变量。测试直接加载 `data.js` / `game.js` 本体，不维护第二份逻辑。
 
 ```bash
 npm test            # 全部用例，约 16 秒
@@ -262,6 +298,7 @@ npm run test:doc    # 重新生成 tests/测试用例.md
 | 布局契约 | 11 | `tests/layout.test.js` |
 | 玩家栏资产明细 | 12 | `tests/playerbar.test.js` |
 | 道具商店 | 13 | `tests/shop.test.js` |
+| 配置与牌堆 | 12 | `tests/config.test.js` |
 | 整局不变量 | 10 | `tests/balance.test.js` |
 
 完整用例清单与需求追溯见 [`tests/测试用例.md`](./tests/测试用例.md)。

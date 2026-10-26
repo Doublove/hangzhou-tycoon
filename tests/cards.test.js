@@ -172,7 +172,8 @@ test('TC-CARD-15 机会卡与命运卡字段完整、标题唯一', () => {
   [env.CHANCE, env.FATE].forEach(deck => {
     deck.forEach(card => {
       assert.ok(card.t && card.d, '卡牌缺少标题或描述');
-      assert.equal(typeof card.act, 'function', `${card.t} 缺少 act`);
+      assert.ok(Array.isArray(card.fx) && card.fx.length, `${card.t} 缺少 fx 声明`);
+      card.fx.forEach(f => assert.ok(f.op, `${card.t} 的 fx 缺少 op`));
     });
     const titles = deck.map(c => c.t);
     assert.equal(new Set(titles).size, titles.length, '卡牌标题重复');
@@ -189,7 +190,7 @@ test('TC-CARD-16 机会卡：直接现金类数值正确', () => {
   cases.forEach(([title, gain]) => {
     const card = env.CHANCE.find(c => c.t === title);
     p.cash = 100;
-    card.act(p);
+    env.applyFx(card.fx, p);
     assert.equal(p.cash, 100 + gain, `${title} 现金变化`);
   });
 });
@@ -198,7 +199,7 @@ test('TC-CARD-17 机会卡：温州老乡计息负债而非白给', () => {
   const env = F.boot();
   const p = env.state.players[0];
   p.cash = 0; p.debt = 0;
-  env.CHANCE.find(c => c.t === '温州老乡').act(p);
+  env.applyFx(env.CHANCE.find(c => c.t === '温州老乡').fx, p);
   assert.equal(p.cash, 150);
   assert.equal(p.debt, 150, '借款应计入负债');
 });
@@ -208,7 +209,7 @@ test('TC-CARD-18 机会卡：人才补贴发给现金最少的玩家', () => {
   env.state.players.forEach((p, i) => { p.cash = 1000 - i * 100; });
   const poor = env.state.players[3];
   const before = poor.cash;
-  env.CHANCE.find(c => c.t === '人才补贴').act(env.state.players[0]);
+  env.applyFx(env.CHANCE.find(c => c.t === '人才补贴').fx, env.state.players[0]);
   assert.equal(poor.cash, before + 120);
 });
 
@@ -218,7 +219,7 @@ test('TC-CARD-19 机会卡：法拍捡漏按 7 折买入无主地块', () => {
   p.cash = 5000;
   const before = p.cash;
   env.setRandom([0]);
-  env.CHANCE.find(c => c.t === '法拍捡漏').act(p);
+  env.applyFx(env.CHANCE.find(c => c.t === '法拍捡漏').fx, p);
   const owned = env.owned(p);
   assert.equal(owned.length, 1);
   assert.equal(owned[0].lv, 1);
@@ -231,7 +232,7 @@ test('TC-CARD-20 机会卡：尾盘甩卖按 6 折买入', () => {
   p.cash = 5000;
   const before = p.cash;
   env.setRandom([0]);
-  env.CHANCE.find(c => c.t === '尾盘甩卖').act(p);
+  env.applyFx(env.CHANCE.find(c => c.t === '尾盘甩卖').fx, p);
   const c = env.owned(p)[0];
   assert.equal(before - p.cash, Math.round(env.value(c) * 0.6));
 });
@@ -239,9 +240,9 @@ test('TC-CARD-20 机会卡：尾盘甩卖按 6 折买入', () => {
 test('TC-CARD-21 机会卡：摇号中签与政策解读提供一次性资格', () => {
   const env = F.boot();
   const p = env.state.players[0];
-  env.CHANCE.find(c => c.t === '摇号中签').act(p);
+  env.applyFx(env.CHANCE.find(c => c.t === '摇号中签').fx, p);
   assert.equal(p.freePass, true);
-  env.CHANCE.find(c => c.t === '政策解读').act(p);
+  env.applyFx(env.CHANCE.find(c => c.t === '政策解读').fx, p);
   assert.equal(p.vision, 2);
 });
 
@@ -249,7 +250,7 @@ test('TC-CARD-22 机会卡：过桥资金 200 万，3 个月后归还', async ()
   const env = F.boot();
   const p = env.state.players[0];
   p.cash = 0;
-  env.CHANCE.find(c => c.t === '过桥资金').act(p);
+  env.applyFx(env.CHANCE.find(c => c.t === '过桥资金').fx, p);
   assert.equal(p.cash, 200);
   assert.equal(p.bridge, 3);
   await env.endMonth();
@@ -261,7 +262,7 @@ test('TC-CARD-22 机会卡：过桥资金 200 万，3 个月后归还', async ()
 test('TC-CARD-23 机会卡：虚假宣传直接进监狱', () => {
   const env = F.boot();
   const p = env.state.players[0];
-  env.CHANCE.find(c => c.t === '虚假宣传被立案').act(p);
+  env.applyFx(env.CHANCE.find(c => c.t === '虚假宣传被立案').fx, p);
   assert.equal(p.inJail, true);
   assert.equal(env.curCells()[p.pos].t, 'jail');
 });
@@ -271,7 +272,7 @@ test('TC-CARD-24 机会卡：烂尾地块可被"顺利交付"修复', () => {
   const p = env.state.players[0];
   const c = env.grant(p, env.at(1), 1);
   c.broken = true;
-  env.CHANCE.find(c2 => c2.t === '顺利交付').act(p);
+  env.applyFx(env.CHANCE.find(c2 => c2.t === '顺利交付').fx, p);
   assert.equal(c.broken, false);
 });
 
@@ -285,7 +286,7 @@ test('TC-CARD-25 命运卡：现金惩罚类数值正确', () => {
   cases.forEach(([title, loss]) => {
     const card = env.FATE.find(c => c.t === title);
     p.cash = 1000;
-    card.act(p);
+    env.applyFx(card.fx, p);
     assert.equal(p.cash, 1000 - loss, `${title} 扣款`);
   });
 });
@@ -295,17 +296,17 @@ test('TC-CARD-26 命运卡：业主维权只对有房者生效', () => {
   const p = env.state.players[0];
   const card = env.FATE.find(c => c.t === '业主维权');
   p.cash = 500;
-  card.act(p);
+  env.applyFx(card.fx, p);
   assert.equal(p.cash, 500, '无房者不应被扣款');
   env.grant(p, env.at(1), 1);
-  card.act(p);
+  env.applyFx(card.fx, p);
   assert.equal(p.cash, 460);
 });
 
 test('TC-CARD-27 命运卡：土拍熔断本回合不能买地', async () => {
   const env = F.boot();
   const p = env.state.players[0];
-  env.FATE.find(c => c.t === '土拍熔断').act(p);
+  env.applyFx(env.FATE.find(c => c.t === '土拍熔断').fx, p);
   assert.equal(p.skipBuy, true);
   const c = env.at(1);
   await env.landOn(p, c);
@@ -318,7 +319,7 @@ test('TC-CARD-28 命运卡：股市跳水同时打压股价与持仓', () => {
   const p = env.state.players[0];
   p.cash = 500; p.stock = 10;
   const price = env.state.stockPrice;
-  env.FATE.find(c => c.t === '股市跳水').act(p);
+  env.applyFx(env.FATE.find(c => c.t === '股市跳水').fx, p);
   assert.equal(p.cash, 430);
   assert.equal(env.state.stockPrice, price * 0.9);
 });
@@ -327,7 +328,7 @@ test('TC-CARD-29 命运卡：限价传闻写入 6 个月的价格上限政策', 
   const env = F.boot();
   const p = env.state.players[0];
   env.setMonth(20);
-  env.FATE.find(c => c.t === '限价传闻').act(p);
+  env.applyFx(env.FATE.find(c => c.t === '限价传闻').fx, p);
   assert.equal(env.hasPolicy('pricecap'), true);
   const mod = env.state.mods.find(m => m.key === 'pricecap');
   assert.equal(mod.until, 26);
@@ -339,7 +340,7 @@ test('TC-CARD-30 命运卡：银行抽贷在负债超净资产一半时强制卖
   env.grant(p, env.at(1), 1);
   p.cash = 100; p.debt = 2000;         // 负债远超净资产的一半
   const n = env.owned(p).length;
-  env.FATE.find(c => c.t === '银行抽贷').act(p);
+  env.applyFx(env.FATE.find(c => c.t === '银行抽贷').fx, p);
   assert.ok(env.owned(p).length < n, '应强制处置一块地');
 });
 
@@ -350,17 +351,17 @@ test('TC-CARD-31 命运卡：空置税只对空地下手', () => {
   env.grant(p, env.at(2), 0);
   env.grant(p, env.at(4), 2);
   p.cash = 500;
-  env.FATE.find(c => c.t === '空置税').act(p);
+  env.applyFx(env.FATE.find(c => c.t === '空置税').fx, p);
   assert.equal(p.cash, 500 - 20, '两块空地各扣 10 万');
 });
 
 test('TC-CARD-32 命运卡：代持被查 / 违规套现直接进监狱', () => {
   const env = F.boot();
   const p = env.state.players[0];
-  env.FATE.find(c => c.t === '代持被查').act(p);
+  env.applyFx(env.FATE.find(c => c.t === '代持被查').fx, p);
   assert.equal(p.inJail, true);
   p.inJail = false;
-  env.FATE.find(c => c.t === '违规套现').act(p);
+  env.applyFx(env.FATE.find(c => c.t === '违规套现').fx, p);
   assert.equal(p.inJail, true);
 });
 
@@ -370,7 +371,7 @@ test('TC-CARD-33 抽卡不会让游戏崩溃，效果字符串可展示', () => 
   p.cash = 1000;
   [...env.CHANCE, ...env.FATE].forEach(card => {
     p.cash = 1000; p.debt = 0; p.inJail = false;
-    const msg = card.act(p);
+    const msg = env.applyFx(card.fx, p);
     assert.equal(typeof msg, 'string', `${card.t} 未返回文案`);
     assert.ok(msg.length > 0, `${card.t} 文案为空`);
   });
@@ -396,7 +397,7 @@ test('TC-CARD-35 学区调整只降当前环区域的热度', () => {
   const others = Object.keys(env.REGIONS).filter(r => !cur.includes(r));
   const before = others.map(r => env.state.heat[r]);
 
-  env.FATE.find(c => c.t === '学区调整').act(env.state.players[0]);
+  env.applyFx(env.FATE.find(c => c.t === '学区调整').fx, env.state.players[0]);
 
   assert.deepEqual(others.map(r => env.state.heat[r]), before, '非本章区域不应被改动');
 });
@@ -407,7 +408,7 @@ test('TC-CARD-36 学区挂牌只抬当前环区域的热度', () => {
   const others = Object.keys(env.REGIONS).filter(r => !cur.includes(r));
   const before = others.map(r => env.state.heat[r]);
 
-  env.CHANCE.find(c => c.t === '学区挂牌').act(env.state.players[0]);
+  env.applyFx(env.CHANCE.find(c => c.t === '学区挂牌').fx, env.state.players[0]);
 
   assert.deepEqual(others.map(r => env.state.heat[r]), before);
 });
@@ -419,8 +420,8 @@ test('TC-CARD-37 随机区域类卡牌只从当前环里挑', () => {
   const before = others.map(r => env.state.heat[r]);
 
   env.setRandom([0]);
-  env.CHANCE.find(c => c.t === '地铁规划泄露').act(env.state.players[0]);
-  env.FATE.find(c => c.t === '舆情反噬').act(env.state.players[0]);
+  env.applyFx(env.CHANCE.find(c => c.t === '地铁规划泄露').fx, env.state.players[0]);
+  env.applyFx(env.FATE.find(c => c.t === '舆情反噬').fx, env.state.players[0]);
 
   assert.deepEqual(others.map(r => env.state.heat[r]), before);
 });
