@@ -846,7 +846,9 @@ function renderCells(){
     if (cell.owner){
       el.classList.add("owned");
       el.style.setProperty("--owner", cell.owner.color);
-      el.style.setProperty("--owner-soft", cell.owner.color + "66");
+      /* 40% 的归属色在米色格子上偏淡，青/蓝系几乎看不出来；
+         提到 60% 后四个玩家的颜色才分得开 */
+      el.style.setProperty("--owner-soft", cell.owner.color + "99");
       bar.style.background = cell.owner.color;
     } else {
       el.classList.remove("owned");
