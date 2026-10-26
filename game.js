@@ -90,11 +90,11 @@ const chapterMonth = () => state.absMonth - curCh().from;
 ----------------------------------------------------- */
 const BUILDING_SVG = {
   0: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="13 38 38 22"><ellipse cx="32" cy="55" rx="15" ry="3.4" fill="#000" opacity=".13"/><polygon points="17,50 32,56 32,58 17,52" fill="#A98F66"/><polygon points="32,56 47,50 47,52 32,58" fill="#BBA275"/><polygon points="17,50 32,44 47,50 32,56" fill="#C9B48C"/><g stroke="#8C6A4A" stroke-width="2" stroke-linecap="round"><path d="M20 47v8M28 44v8M36 44v8M44 47v8"/><path d="M20 50l24-8M20 54l24-8" stroke-width="1.4" opacity=".7"/></g><g fill="#6B8E4E"><circle cx="23" cy="52" r="1.5"/><circle cx="30" cy="54.5" r="1.2"/><circle cx="41" cy="51" r="1.4"/></g></svg>`,
-  1: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="16 32 32 26"><ellipse cx="32" cy="55" rx="15" ry="3.4" fill="#000" opacity=".13"/><polygon points="17,50 32,56 32,46 17,40" fill="#D8C7A6"/><polygon points="32,56 47,50 47,40 32,46" fill="#EADCC0"/><polygon points="17,40 32,34 47,40 32,46" fill="#8C5A44"/><polygon points="17,40 32,34 32,46 17,40" fill="#6E4534" opacity=".5"/><polygon points="35,50 41,47 41,50 35,53" fill="#5C4033"/><polygon points="21,46.5 25,48.5 25,51 21,49" fill="#7FA8C9" opacity=".9"/></svg>`,
-  2: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="16 24 32 34"><ellipse cx="32" cy="55" rx="15" ry="3.4" fill="#000" opacity=".13"/><polygon points="17,50 32,56 32,36 17,30" fill="#D8C7A6"/><polygon points="32,56 47,50 47,30 32,36" fill="#EADCC0"/><polygon points="17,41 32,47 47,41 32,35" fill="#CBB894"/><polygon points="17,30 32,24 47,30 32,36" fill="#8C5A44"/><polygon points="17,30 32,24 32,36 17,30" fill="#6E4534" opacity=".5"/><polygon points="19.7,48.3 22.7,49.5 22.7,45.7 19.7,44.5" fill="#5C7A96"/><polygon points="24.5,50.2 27.5,51.4 27.5,47.6 24.5,46.5" fill="#5C7A96"/><polygon points="19.7,41.1 22.7,42.3 22.7,38.5 19.7,37.3" fill="#5C7A96"/><polygon points="24.5,43.0 27.5,44.2 27.5,40.4 24.5,39.3" fill="#5C7A96"/><polygon points="34.7,52.1 40.7,49.7 40.7,46.0 34.7,48.4" fill="#5C7A96"/><polygon points="34.7,44.9 40.7,42.5 40.7,38.8 34.7,41.2" fill="#5C7A96"/><polygon points="35,50 41,47 41,50 35,53" fill="#5C4033"/></svg>`,
-  3: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="16 6 32 52"><ellipse cx="32" cy="55" rx="15" ry="3.4" fill="#000" opacity=".13"/><polygon points="17,50 32,56 32,22 17,16" fill="#DCD5C6"/><polygon points="32,56 47,50 47,16 32,22" fill="#EFE9DC"/><polygon points="17,16 32,10 47,16 32,22" fill="#8C8477"/><polygon points="17,16 32,10 32,22 17,16" fill="#B7AFA2" opacity=".45"/><polygon points="19.7,46.3 22.7,47.5 22.7,44.3 19.7,43.1" fill="#5C7A96"/><polygon points="24.5,48.2 27.5,49.4 27.5,46.2 24.5,45.1" fill="#5C7A96"/><polygon points="19.7,40.2 22.7,41.4 22.7,38.2 19.7,37.0" fill="#5C7A96"/><polygon points="24.5,42.1 27.5,43.3 27.5,40.1 24.5,38.9" fill="#5C7A96"/><polygon points="19.7,34.1 22.7,35.3 22.7,32.1 19.7,30.9" fill="#5C7A96"/><polygon points="24.5,36.0 27.5,37.2 27.5,34.0 24.5,32.8" fill="#5C7A96"/><polygon points="19.7,28.0 22.7,29.2 22.7,26.0 19.7,24.8" fill="#5C7A96"/><polygon points="24.5,29.9 27.5,31.1 27.5,27.9 24.5,26.7" fill="#5C7A96"/><polygon points="34.7,50.2 40.7,47.8 40.7,44.6 34.7,47.0" fill="#5C7A96"/><polygon points="34.7,44.0 40.7,41.7 40.7,38.5 34.7,40.9" fill="#5C7A96"/><polygon points="34.7,37.9 40.7,35.5 40.7,32.4 34.7,34.7" fill="#5C7A96"/><polygon points="34.7,31.8 40.7,29.4 40.7,26.2 34.7,28.6" fill="#5C7A96"/><polygon points="32,44 32,56 35,54.5 35,42.5" fill="#4A5560"/></svg>`,
-  4: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="16 0 32 58"><ellipse cx="32" cy="55" rx="15" ry="3.4" fill="#000" opacity=".13"/><polygon points="17,50 32,56 32,14 17,8" fill="#8FB6D4"/><polygon points="32,56 47,50 47,8 32,14" fill="#BBD8EC"/><polygon points="17,8 32,2 47,8 32,14" fill="#E4F1F9"/><g stroke="#3A4A5A" stroke-width=".8" opacity=".5"><path d="M17,46 47,46"/><path d="M17,42 47,42"/><path d="M17,38 47,38"/><path d="M17,34 47,34"/><path d="M17,30 47,30"/><path d="M17,26 47,26"/><path d="M17,22 47,22"/><path d="M17,18 47,18"/><path d="M17,14 47,14"/><path d="M17,10 47,10"/><path d="M32,44 32,2"/></g><polygon points="17,8 32,2 32,14 17,8" fill="#6E94B0" opacity=".4"/><polygon points="32,44 32,56 36,54 36,42" fill="#2E3A45"/></svg>`,
-  5: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="18 12 28 46"><ellipse cx="32" cy="55" rx="15" ry="3.4" fill="#000" opacity=".13"/><polygon points="17,50 32,56 32,44 17,38" fill="#6E7C88"/><polygon points="32,56 47,50 47,38 32,44" fill="#8B99A6"/><polygon points="17,38 32,32 47,38 32,44" fill="#B6C3CE"/><polygon points="17,38 32,32 32,44 17,38" fill="#5A6874" opacity=".5"/><polygon points="20,38 26,41 26,15 20,12" fill="#8FA9BE"/><polygon points="26,41 32,38 32,12 26,15" fill="#C3D8E8"/><polygon points="20,12 26,15 32,12 26,9" fill="#E8B23A"/><polygon points="34,38 39,40.5 39,18.5 34,16" fill="#8FA9BE"/><polygon points="39,40.5 44,38 44,16 39,18.5" fill="#C3D8E8"/><polygon points="34,16 39,18.5 44,16 39,13.5" fill="#E8B23A"/><g fill="#F2D27A" opacity=".85"><polygon points="19,47 24,49.5 24,51 19,48.5"/><polygon points="40,48.5 45,46 45,47.5 40,50"/></g></svg>`
+  1: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="16 32 32 26"><ellipse cx="32" cy="55" rx="15" ry="3.4" fill="#000" opacity=".13"/><polygon points="17,50 32,56 32,46 17,40" fill="__WL__"/><polygon points="32,56 47,50 47,40 32,46" fill="__WR__"/><polygon points="17,40 32,34 47,40 32,46" fill="__RF__"/><polygon points="17,40 32,34 32,46 17,40" fill="__RF2__" opacity=".5"/><polygon points="35,50 41,47 41,50 35,53" fill="#5C4033"/><polygon points="21,46.5 25,48.5 25,51 21,49" fill="#7FA8C9" opacity=".9"/></svg>`,
+  2: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="16 24 32 34"><ellipse cx="32" cy="55" rx="15" ry="3.4" fill="#000" opacity=".13"/><polygon points="17,50 32,56 32,36 17,30" fill="__WL__"/><polygon points="32,56 47,50 47,30 32,36" fill="__WR__"/><polygon points="17,41 32,47 47,41 32,35" fill="__WL2__"/><polygon points="17,30 32,24 47,30 32,36" fill="__RF__"/><polygon points="17,30 32,24 32,36 17,30" fill="__RF2__" opacity=".5"/><polygon points="19.7,48.3 22.7,49.5 22.7,45.7 19.7,44.5" fill="#5C7A96"/><polygon points="24.5,50.2 27.5,51.4 27.5,47.6 24.5,46.5" fill="#5C7A96"/><polygon points="19.7,41.1 22.7,42.3 22.7,38.5 19.7,37.3" fill="#5C7A96"/><polygon points="24.5,43.0 27.5,44.2 27.5,40.4 24.5,39.3" fill="#5C7A96"/><polygon points="34.7,52.1 40.7,49.7 40.7,46.0 34.7,48.4" fill="#5C7A96"/><polygon points="34.7,44.9 40.7,42.5 40.7,38.8 34.7,41.2" fill="#5C7A96"/><polygon points="35,50 41,47 41,50 35,53" fill="#5C4033"/></svg>`,
+  3: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="16 6 32 52"><ellipse cx="32" cy="55" rx="15" ry="3.4" fill="#000" opacity=".13"/><polygon points="17,50 32,56 32,22 17,16" fill="__WL__"/><polygon points="32,56 47,50 47,16 32,22" fill="__WR__"/><polygon points="17,16 32,10 47,16 32,22" fill="__RF__"/><polygon points="17,16 32,10 32,22 17,16" fill="__RF2__" opacity=".45"/><polygon points="19.7,46.3 22.7,47.5 22.7,44.3 19.7,43.1" fill="#5C7A96"/><polygon points="24.5,48.2 27.5,49.4 27.5,46.2 24.5,45.1" fill="#5C7A96"/><polygon points="19.7,40.2 22.7,41.4 22.7,38.2 19.7,37.0" fill="#5C7A96"/><polygon points="24.5,42.1 27.5,43.3 27.5,40.1 24.5,38.9" fill="#5C7A96"/><polygon points="19.7,34.1 22.7,35.3 22.7,32.1 19.7,30.9" fill="#5C7A96"/><polygon points="24.5,36.0 27.5,37.2 27.5,34.0 24.5,32.8" fill="#5C7A96"/><polygon points="19.7,28.0 22.7,29.2 22.7,26.0 19.7,24.8" fill="#5C7A96"/><polygon points="24.5,29.9 27.5,31.1 27.5,27.9 24.5,26.7" fill="#5C7A96"/><polygon points="34.7,50.2 40.7,47.8 40.7,44.6 34.7,47.0" fill="#5C7A96"/><polygon points="34.7,44.0 40.7,41.7 40.7,38.5 34.7,40.9" fill="#5C7A96"/><polygon points="34.7,37.9 40.7,35.5 40.7,32.4 34.7,34.7" fill="#5C7A96"/><polygon points="34.7,31.8 40.7,29.4 40.7,26.2 34.7,28.6" fill="#5C7A96"/><polygon points="32,44 32,56 35,54.5 35,42.5" fill="#4A5560"/></svg>`,
+  4: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="16 0 32 58"><ellipse cx="32" cy="55" rx="15" ry="3.4" fill="#000" opacity=".13"/><polygon points="17,50 32,56 32,14 17,8" fill="__WL__"/><polygon points="32,56 47,50 47,8 32,14" fill="__WR__"/><polygon points="17,8 32,2 47,8 32,14" fill="__RF__"/><g stroke="#3A4A5A" stroke-width=".8" opacity=".5"><path d="M17,46 47,46"/><path d="M17,42 47,42"/><path d="M17,38 47,38"/><path d="M17,34 47,34"/><path d="M17,30 47,30"/><path d="M17,26 47,26"/><path d="M17,22 47,22"/><path d="M17,18 47,18"/><path d="M17,14 47,14"/><path d="M17,10 47,10"/><path d="M32,44 32,2"/></g><polygon points="17,8 32,2 32,14 17,8" fill="__RF2__" opacity=".4"/><polygon points="32,44 32,56 36,54 36,42" fill="#2E3A45"/></svg>`,
+  5: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="18 12 28 46"><ellipse cx="32" cy="55" rx="15" ry="3.4" fill="#000" opacity=".13"/><polygon points="17,50 32,56 32,44 17,38" fill="__WL__"/><polygon points="32,56 47,50 47,38 32,44" fill="__WR__"/><polygon points="17,38 32,32 47,38 32,44" fill="__RF2__"/><polygon points="17,38 32,32 32,44 17,38" fill="__WL2__" opacity=".5"/><polygon points="20,38 26,41 26,15 20,12" fill="__WL__"/><polygon points="26,41 32,38 32,12 26,15" fill="__WR__"/><polygon points="20,12 26,15 32,12 26,9" fill="__RF__"/><polygon points="34,38 39,40.5 39,18.5 34,16" fill="__WL__"/><polygon points="39,40.5 44,38 44,16 39,18.5" fill="__WR__"/><polygon points="34,16 39,18.5 44,16 39,13.5" fill="__RF__"/><g fill="#F2D27A" opacity=".85"><polygon points="19,47 24,49.5 24,51 19,48.5"/><polygon points="40,48.5 45,46 45,47.5 40,50"/></g></svg>`
 };
 
 
@@ -186,12 +186,74 @@ function injectMetroAssets(){
   });
 }
 
+/* ---------------- 建筑配色跟随玩家 ----------------
+   房子的墙面与屋顶按主人染色，窗户/门/灯带保持中性——
+   既让"这块地是谁的"一眼可读，又不至于把楼染成一块色板。
+----------------------------------------------------- */
+function hexToHsl(hex){
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+  const l = (mx + mn) / 2;
+  let h = 0, s = 0;
+  if (mx !== mn){
+    const d = mx - mn;
+    s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+    if (mx === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+    else if (mx === g) h = ((b - r) / d + 2) / 6;
+    else h = ((r - g) / d + 4) / 6;
+  }
+  return { h: h * 360, s: s * 100, l: l * 100 };
+}
+
+function hslToHex(h, s, l){
+  s = Math.max(0, Math.min(100, s)) / 100;
+  l = Math.max(0, Math.min(100, l)) / 100;
+  const k = n => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  const to = x => Math.round(255 * x).toString(16).padStart(2, "0");
+  return `#${to(f(0))}${to(f(8))}${to(f(4))}`;
+}
+
+/* 玩家色 → 四个明度档：背光墙 / 受光墙 / 屋顶 / 屋顶暗面 */
+function playerShades(hex){
+  const { h, s, l } = hexToHsl(hex);
+  return {
+    WL:  hslToHex(h, s * 0.48, Math.min(76, l + 28)),
+    WR:  hslToHex(h, s * 0.32, Math.min(88, l + 42)),
+    WL2: hslToHex(h, s * 0.40, Math.min(82, l + 35)),
+    RF:  hslToHex(h, s * 0.78, Math.max(28, l - 2)),
+    RF2: hslToHex(h, s * 0.62, Math.max(20, l - 13)),
+  };
+}
+
+function tintSvg(svg, sh){
+  return svg
+    .replace(/__WL2__/g, sh.WL2)
+    .replace(/__WL__/g, sh.WL)
+    .replace(/__WR__/g, sh.WR)
+    .replace(/__RF2__/g, sh.RF2)
+    .replace(/__RF__/g, sh.RF);
+}
+
 function injectBuildingAssets(){
   const root = document.documentElement;
   if (!root || !root.style) return;
+  /* 每个角色一套（id 与 CHARS 下标一致） */
+  CHARS.forEach(ch => {
+    const sh = playerShades(ch.color);
+    Object.keys(BUILDING_SVG).forEach(lv => {
+      const svg = tintSvg(BUILDING_SVG[lv], sh);
+      root.style.setProperty(`--bld${lv}-${ch.id}`,
+        `url("data:image/svg+xml,${encodeURIComponent(svg)}")`);
+    });
+  });
+  /* 兜底：没有主人时用原始土色 */
   Object.keys(BUILDING_SVG).forEach(lv => {
     root.style.setProperty(`--bld${lv}`,
-      `url("data:image/svg+xml,${encodeURIComponent(BUILDING_SVG[lv])}")`);
+      `url("data:image/svg+xml,${encodeURIComponent(tintSvg(BUILDING_SVG[lv], playerShades("#8C7A5C"))) }")`);
   });
 }
 
@@ -884,6 +946,9 @@ function renderBuildings(){
     const d = document.createElement("div");
     d.className = "bld";
     d.dataset.lv = c.lv;
+    /* 房子用主人的配色：变量名带角色 id，座位 0 号选谁就取谁那套 */
+    d.style.backgroundImage =
+      `var(--bld${c.lv}-${c.owner.charId}, var(--bld${c.lv}))`;
     slot.appendChild(d);
   });
 }
@@ -913,11 +978,11 @@ function renderTokens(){
       t.className = "token" + (p === cur && !state.over ? " active" : "");
       t.style.color = p.color;
       t.textContent = PIECE[p.id] || "♟";
-      /* 方形棋盘格子约 40px，棋子比圆环版收一档，免得盖住地块名 */
+      /* 棋子放大到格子宽度的量级：字形的实际笔画只占 font-size 的七成左右 */
       const scale = Math.min(1.3, Math.max(1, (wrap.clientWidth || 400) / 400));
-      const size = Math.round((cnt === 1 ? 19 : cnt === 2 ? 17 : 15) * scale);
+      const size = Math.round((cnt === 1 ? 38 : cnt === 2 ? 32 : 28) * scale);
       t.style.fontSize = size + "px";
-      const dx = cnt > 1 ? (k - (cnt - 1) / 2) * (size * 0.72) : 0;
+      const dx = cnt > 1 ? (k - (cnt - 1) / 2) * (size * 0.42) : 0;
       t.style.left = `calc(${c.x}% + ${dx}px)`;
       t.style.top = `${c.y}%`;
       wrap.appendChild(t);

@@ -282,3 +282,43 @@ test('TC-MAP-23 税务格已移除，12 号是唯一证券格', () => {
     assert.equal(ring.cells.filter(c => c.t === 'stock').length, 1, '证券只保留一个');
   });
 });
+
+/* ---------------- 建筑配色跟随玩家（V2.3） ---------------- */
+
+test('TC-MAP-24 每个角色的建筑配色都不同，且保持自己的色相', () => {
+  const env = F.boot();
+  const seen = new Map();
+  env.CHARS.forEach(ch => {
+    const sh = env.playerShades(ch.color);
+    const src = env.hexToHsl(ch.color);
+    // 屋顶是主色，色相必须与角色色一致
+    const rf = env.hexToHsl(sh.RF);
+    assert.ok(Math.abs(rf.h - src.h) < 2, `${ch.name} 屋顶色相应贴近角色色`);
+    // 墙面是同一色相的浅调
+    const wr = env.hexToHsl(sh.WR);
+    assert.ok(wr.l > src.l + 20, `${ch.name} 受光墙应明显更浅`);
+    seen.set(sh.RF, ch.name);
+  });
+  assert.equal(seen.size, env.CHARS.length, '每个角色的屋顶色不能撞车');
+});
+
+test('TC-MAP-25 建筑 SVG 用占位符染色，不再写死墙面色', () => {
+  const env = F.boot();
+  // lv1—lv5 都要有占位符，lv0（空地）不需要
+  [1, 2, 3, 4, 5].forEach(lv => {
+    assert.match(env.BUILDING_SVG[lv], /__WL__/, `lv${lv} 缺少左墙占位符`);
+    assert.match(env.BUILDING_SVG[lv], /__WR__/, `lv${lv} 缺少右墙占位符`);
+    assert.match(env.BUILDING_SVG[lv], /__RF__/, `lv${lv} 缺少屋顶占位符`);
+  });
+  // 染色后不应残留占位符
+  const sh = env.playerShades(env.CHARS[0].color);
+  [1, 2, 3, 4, 5].forEach(lv => {
+    const out = env.tintSvg(env.BUILDING_SVG[lv], sh);
+    assert.doesNotMatch(out, /__[A-Z0-9]+__/, `lv${lv} 染色后仍有占位符`);
+    assert.match(out, /<svg/);
+  });
+  // 不同角色染出来的图必须不同
+  const a = env.tintSvg(env.BUILDING_SVG[3], env.playerShades(env.CHARS[0].color));
+  const b = env.tintSvg(env.BUILDING_SVG[3], env.playerShades(env.CHARS[2].color));
+  assert.notEqual(a, b, '不同角色应得到不同配色的建筑');
+});

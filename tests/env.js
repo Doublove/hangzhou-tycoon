@@ -207,6 +207,7 @@ const EXPORTS = [
   'year', 'monthLabel', 'curCh', 'chapterMonth', 'buildRings', 'curCells', 'allCells', 'owned',
   'curRegions', 'hottestRegions', 'shopPrice', 'askShop', 'enterShop',
   'WALK_LEN', 'JAIL_IDX', 'JAIL_EXIT', 'RING_GRID', 'gridOf', 'cellCenter', 'slotOf',
+  'BUILDING_SVG', 'playerShades', 'tintSvg', 'hexToHsl', 'hslToHex',
   'eraF', 'heatF', 'value', 'rentOf', 'neighbors', 'adjacentBonus', 'adjCount', 'sandwichedOwner',
   'tollParts', 'tollOf', 'leverage', 'cappedFor', 'tollFor', 'upCost', 'estateValue', 'netWorth', 'loanCap', 'loanRate',
   'hasPolicy', 'setPolicy', 'extendPolicy', 'clearPolicy', 'heatAdd', 'raiseCap', 'triggerStall',
