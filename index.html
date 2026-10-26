@@ -790,6 +790,127 @@
   .toast{background:rgba(42,36,32,.94);color:#F5F0E6;border:none}
   #logJump{background:rgba(42,36,32,.85);color:#EDE6D6}
 
+
+  /* ==========================================================
+     V4：方形棋盘（24 格外圈 + 中心监狱 + 外圈建筑带）
+     9×9 网格：row1/row9/col1/col9 是建筑带，格子占外圈一圈，
+     正中心 5×5 空出来放监狱。
+     ========================================================== */
+  #boardWrap{
+    display:grid;
+    grid-template-columns:repeat(9,minmax(0,1fr));
+    grid-template-rows:repeat(9,minmax(0,1fr));
+    padding:0;gap:0;
+  }
+  #boardWrap .cell{
+    position:relative;z-index:2;
+    width:auto;height:auto;transform:none;
+    grid-column:var(--c);grid-row:var(--r);
+    margin:3px;padding:0 1px;
+    display:flex;align-items:center;justify-content:center;
+    border:2px solid #2A2420;border-radius:7px;
+    background:linear-gradient(180deg,#FFFDF8,#F1E7D6);
+    color:#2A2016;
+    box-shadow:0 2px 0 rgba(60,38,16,.32);
+    font-size:8px;line-height:1.06;
+    cursor:pointer;overflow:hidden;
+  }
+  #boardWrap .cell .nm{
+    position:static;background:none;border:none;padding:0;margin:0;
+    font-size:8px;font-weight:700;line-height:1.06;letter-spacing:-.2px;
+    text-align:center;max-width:100%;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  /* 功能格：深色底白字，黑框不变 */
+  #boardWrap .cell.special{
+    background:linear-gradient(160deg,#33383F,#20242A);
+    color:#E9EDF2;border-color:#15181C;
+  }
+  #boardWrap .cell.special .nm{font-size:8.5px;letter-spacing:0}
+  #boardWrap .cell.shop{background:linear-gradient(160deg,#6E5420,#43300F);color:#FBF3DF}
+  #boardWrap .cell.scenic{background:linear-gradient(160deg,#2F5A46,#1D3A2C);color:#EAF4EE}
+  #boardWrap .cell.locked{background:linear-gradient(180deg,#F6F1E7,#E9E1D2);color:#A2937C;border-style:dashed}
+  #boardWrap .cell.broken{background:linear-gradient(180deg,#F0E0DC,#DCC4BE);color:#8A5A52}
+  /* 已购：黑框常驻，框内加一圈玩家色，房子画在外侧槽位里 */
+  #boardWrap .cell.owned{
+    background:linear-gradient(180deg,#FFFDF8,#F6EEDF);
+    box-shadow:inset 0 0 0 2px var(--owner-soft,#9996), 0 2px 0 rgba(60,38,16,.32);
+  }
+  #boardWrap .cell.owned .nm{color:#3A2E1E}
+  #boardWrap .cell.owned .nm{color:#2A2016}
+  #boardWrap .cell .bar{display:none}
+  /* 监狱：棋盘正中心 */
+  #boardWrap .cell.jailcell{
+    background:linear-gradient(160deg,#5B4370,#3A2B4A);
+    color:#F0EAF4;border-color:#2A1F36;
+    box-shadow:0 3px 0 #2A1F36, 0 0 16px rgba(91,67,112,.4);
+  }
+  #boardWrap .cell.jailcell .nm{font-size:9px;letter-spacing:1.5px}
+
+  /* 建筑槽：地块外侧紧邻的一格，常驻；空地是虚线空框 */
+  #boardWrap .bslot{
+    grid-column:var(--c);grid-row:var(--r);
+    margin:5px;border-radius:7px;
+    display:flex;align-items:flex-end;justify-content:center;
+    border:1.5px dashed rgba(90,60,30,.28);
+    background:rgba(255,252,244,.26);
+    overflow:visible;z-index:1;
+  }
+  #boardWrap .bslot.empty::after{
+    content:"";width:56%;height:34%;margin-bottom:16%;
+    border:1.5px dashed rgba(90,60,30,.22);border-radius:3px;
+  }
+  #boardWrap .bslot:not(.empty){border-color:transparent;background:transparent}
+  #boardWrap .bslot .bld{
+    position:static;width:100%;height:100%;transform:none;
+    background-size:contain;background-repeat:no-repeat;
+    background-position:center bottom;
+    filter:drop-shadow(0 2px 2px rgba(70,45,20,.38));
+  }
+  #boardWrap .bslot .bld[data-lv="1"]{background-image:var(--bld1)}
+  #boardWrap .bslot .bld[data-lv="2"]{background-image:var(--bld2)}
+  #boardWrap .bslot .bld[data-lv="3"]{background-image:var(--bld3)}
+  #boardWrap .bslot .bld[data-lv="4"]{background-image:var(--bld4)}
+  #boardWrap .bslot .bld[data-lv="5"]{background-image:var(--bld5)}
+
+  /* 监狱 ↔ 证券格的双线 */
+  #boardWrap .jailwire{
+    position:absolute;left:50%;top:calc(100% * 5.5 / 9);height:calc(100% * 2.5 / 9);
+    width:18px;transform:translateX(-50%);
+    z-index:0;pointer-events:none;
+  }
+  #boardWrap .jailwire::before,#boardWrap .jailwire::after{
+    content:"";position:absolute;top:0;bottom:0;width:2.5px;border-radius:2px;
+    background:rgba(58,42,24,.5);
+  }
+  #boardWrap .jailwire::before{left:3px}
+  #boardWrap .jailwire::after{right:3px}
+
+  /* 连片带画在格子下层，只从缝隙里露出来 */
+  #boardWrap .chainlink{
+    position:absolute;height:4px;border-radius:2px;
+    transform-origin:0 50%;margin-top:-2px;
+    opacity:.55;z-index:1;pointer-events:none;
+  }
+  #boardWrap .token{z-index:8}
+  /* 连片：格子描边呼吸 + 右上角 ×2 角标 */
+  #boardWrap .cell.chain{
+    box-shadow:inset 0 0 0 2px var(--owner,#999), 0 2px 0 rgba(60,38,16,.32);
+  }
+  #boardWrap .cell.chain::after{
+    content:attr(data-chain);position:absolute;top:1px;right:2px;
+    font-size:6px;font-weight:800;color:var(--owner,#999);
+    letter-spacing:0;line-height:1;
+  }
+  /* 圆形辅助线是圆环棋盘的产物，方形布局下只会干扰 */
+  #boardWrap .ring{display:none}
+  /* 章节名上移到监狱上方，正中心留给监狱 */
+  #boardWrap .core{
+    top:30%;z-index:1;pointer-events:none;
+  }
+  #boardWrap .core b{font-size:15px;letter-spacing:5px;color:rgba(70,45,20,.34)}
+  #boardWrap .core span{font-size:8px;letter-spacing:1.6px;color:rgba(70,45,20,.3)}
+
 </style>
 </head>
 <body>

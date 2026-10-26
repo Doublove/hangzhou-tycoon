@@ -158,7 +158,7 @@ test('TC-BANK-13 清算期内仍可正常掷骰行动', async () => {
   env.put(p, 23);
   env.setRandom([0]);
   await env.takeTurn(env.state.players.indexOf(p));
-  assert.equal(p.pos, 24, '清算期不应阻止移动');
+  assert.equal(p.pos, 0, '清算期不应阻止移动');
 });
 
 test('TC-BANK-14 清算拍卖不足以清偿时，宽限期满即出局（结构性缺口）',

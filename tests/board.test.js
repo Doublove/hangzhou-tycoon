@@ -21,19 +21,18 @@ test('TC-MAP-01 四环对应四章，环名与年代连续', () => {
   ]);
 });
 
-test('TC-MAP-02 每环 25 格（起点 1 + 地块 16 + 功能格 8）', () => {
+test('TC-MAP-02 每环 24 格行走环 + 1 个中心监狱（V2.2 方形布局）', () => {
   const env = F.boot();
   env.RINGS.forEach((ring, i) => {
     const cells = env.state.rings[i].cells;
-    assert.equal(cells.length, 25, `第 ${i} 环应为 25 格`);
-    const count = t => cells.filter(c => c.t === t).length;
+    assert.equal(cells.length, 25, `第 ${i} 环应为 25 个格子（24 行走 + 1 监狱）`);
+    assert.equal(env.WALK_LEN, 24);
+    const walk = cells.slice(0, env.WALK_LEN);
+    const count = t => walk.filter(c => c.t === t).length;
     assert.equal(count('start'), 1);
     assert.equal(count('plot'), 16);
-    assert.equal(
-      cells.length - count('start') - count('plot'),
-      8,
-      '功能格应为 8 个',
-    );
+    assert.equal(walk.length - count('start') - count('plot'), 7, '环上功能格应为 7 个');
+    assert.equal(cells[env.JAIL_IDX].t, 'jail', '最后一格是中心监狱');
   });
 });
 
@@ -172,36 +171,114 @@ test('TC-MAP-15 TRACK_PATTERN 的 p0—p15 与地块数量一一对应', () => {
   });
 });
 
-test('TC-MAP-16 25 格单骰一圈约 7.1 回合（节奏预算）', () => {
+test('TC-MAP-16 24 格行走环单骰一圈约 6.9 回合（节奏预算）', () => {
   const env = F.boot();
-  assert.equal(env.curCells().length, 25);
-  const laps = 25 / 3.5;   // 单骰期望 3.5
-  assert.ok(laps > 6.9 && laps < 7.4, `一圈应约 7.1 回合，实际 ${laps.toFixed(2)}`);
+  assert.equal(env.WALK_LEN, 24);
+  const laps = 24 / 3.5;   // 单骰期望 3.5
+  assert.ok(laps > 6.7 && laps < 7.1, `一圈应约 6.9 回合，实际 ${laps.toFixed(2)}`);
 });
 
-test('TC-MAP-17 监狱在第 9 格，机会在第 21 格（v1.8 交换）', () => {
+test('TC-MAP-17 监狱不在行走路径上，只能靠卡牌送入（V2.2）', async () => {
   const env = F.boot();
-  env.state.rings.forEach((ring, i) => {
-    assert.equal(ring.cells[9].t, 'jail', `第 ${i} 环 9 号格应为监狱`);
-    assert.equal(ring.cells[21].t, 'chance', `第 ${i} 环 21 号格应为机会`);
+  const p = env.state.players[0];
+  const cells = env.curCells();
+  const jail = cells.findIndex(c => c.t === 'jail');
+  assert.equal(jail, env.JAIL_IDX, '监狱是最后一个格子');
+  assert.ok(jail >= env.WALK_LEN, '监狱下标在行走范围之外');
+
+  // 连掷 6 点绕一整圈，落点始终在 0—23 之间，不会踩进监狱
+  env.put(p, 0);
+  for (let i = 0; i < 4; i++){
+    p.pos = (p.pos + 6) % env.WALK_LEN;
+    assert.ok(p.pos < env.WALK_LEN, `第 ${i} 步落到了监狱`);
+  }
+  assert.equal(p.pos, 0, '24 步（4×6）正好回到起点');
+});
+
+test('TC-MAP-18 机会卡与命运卡都能把人送进监狱', () => {
+  const env = F.boot();
+  const p = env.state.players[0];
+  const jailCards = [...env.CHANCE, ...env.FATE].filter(c => {
+    p.inJail = false; p.pos = 0;
+    c.act(p);
+    return p.inJail;
   });
+  assert.ok(jailCards.length >= 2, `应有多张卡能触发进监狱，实际 ${jailCards.length}`);
+  assert.equal(p.pos, env.JAIL_IDX, '被送进监狱后位置指到中心格');
 });
 
-test('TC-MAP-18 15 号格是道具店，且每环唯一', () => {
+test('TC-MAP-19 24 格方形环：相邻两格在网格上必须挨着', () => {
+  const env = F.boot();
+  for (let i = 0; i < env.WALK_LEN; i++){
+    const a = env.gridOf(i), b = env.gridOf((i + 1) % env.WALK_LEN);
+    const d = Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]);
+    assert.equal(d, 1, `第 ${i} 格与下一格不相邻：${a} → ${b}`);
+  }
+  // 9×9 外圈共 24 格，每格唯一
+  const seen = new Set();
+  for (let i = 0; i < env.WALK_LEN; i++){
+    const key = env.gridOf(i).join(',');
+    assert.ok(!seen.has(key), `格子位置重复：${key}`);
+    seen.add(key);
+  }
+  assert.equal(seen.size, 24);
+});
+
+test('TC-MAP-20 功能格落在四角与四边中点，地块不占拐角', () => {
+  const env = F.boot();
+  const at = (c, r) => env.curCells().findIndex(x => {
+    const g = env.gridOf(x.idx);
+    return g[0] === c && g[1] === r;
+  });
+  // 四角
+  assert.equal(env.curCells()[at(2, 2)].t, 'chance', '左上角是机会');
+  assert.equal(env.curCells()[at(8, 2)].t, 'chance', '右上角是机会');
+  assert.equal(env.curCells()[at(2, 8)].t, 'shop', '左下角是道具店');
+  assert.equal(env.curCells()[at(8, 8)].t, 'scenic', '右下角是风景区');
+  // 四边中点
+  assert.equal(env.curCells()[at(5, 2)].t, 'start', '上边中点是起点');
+  assert.equal(env.curCells()[at(5, 8)].t, 'stock', '下边中点是证券');
+  assert.equal(env.curCells()[at(8, 5)].t, 'fate', '右边中点是命运');
+  assert.equal(env.curCells()[at(2, 5)].t, 'bank', '左边中点是银行');
+  // 监狱在正中心
+  assert.equal(env.curCells()[env.JAIL_IDX].t, 'jail');
+  assert.equal(env.gridOf(env.JAIL_IDX).join(','), '5,5', '监狱在正中心');
+});
+
+test('TC-MAP-21 每个地块都有一个外侧建筑槽，且不与任何格子重合', () => {
+  const env = F.boot();
+  const cellKeys = new Set();
+  for (let i = 0; i < env.curCells().length; i++) cellKeys.add(env.gridOf(i).join(','));
+
+  let slots = 0;
+  env.curCells().forEach(c => {
+    if (c.t !== 'plot') return;
+    const slot = env.slotOf(c.idx);
+    assert.ok(slot, `地块 ${c.name} 没有建筑槽`);
+    assert.ok(!cellKeys.has(slot.join(',')), `建筑槽 ${slot} 与格子重叠`);
+    // 槽位必须紧贴格子（曼哈顿距离 1）
+    const g = env.gridOf(c.idx);
+    assert.equal(Math.abs(g[0] - slot[0]) + Math.abs(g[1] - slot[1]), 1);
+    slots++;
+  });
+  assert.equal(slots, 16, '16 个地块各一个建筑槽');
+});
+
+test('TC-MAP-22 道具店每环唯一，且落在左下角', () => {
   const env = F.boot();
   env.state.rings.forEach((ring, i) => {
     assert.equal(ring.cells[15].t, 'shop', `第 ${i} 环 15 号格应为道具店`);
     assert.equal(ring.cells[15].name, '道具店');
+    assert.equal(env.gridOf(15).join(','), '2,8', '道具店在左下角');
     assert.equal(ring.cells.filter(c => c.t === 'shop').length, 1);
   });
 });
 
-test('TC-MAP-19 税务格已移除，12 号是唯一证券格', () => {
+test('TC-MAP-23 税务格已移除，12 号是唯一证券格', () => {
   const env = F.boot();
   env.state.rings.forEach((ring, i) => {
     assert.equal(ring.cells.filter(c => c.t === 'tax').length, 0, `第 ${i} 环不应再有税务格`);
     assert.equal(ring.cells[12].t, 'stock', `第 ${i} 环 12 号应为证券`);
     assert.equal(ring.cells.filter(c => c.t === 'stock').length, 1, '证券只保留一个');
-    assert.equal(ring.cells.length, 25, '25 号格已删除');
   });
 });

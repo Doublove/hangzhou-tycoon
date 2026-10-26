@@ -89,89 +89,12 @@ const chapterMonth = () => state.absMonth - curCh().from;
    用 data URI 注入 CSS 变量，格子通过 data-lv 取图。
 ----------------------------------------------------- */
 const BUILDING_SVG = {
-  /* Lv0 空地：围挡 + 杂草 */
-  0: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-    <ellipse cx="32" cy="52" rx="19" ry="6" fill="#000" opacity=".10"/>
-    <polygon points="14,42 32,32 50,42 32,52" fill="#C9B48C"/>
-    <polygon points="14,42 32,52 32,55 14,45" fill="#A98F66"/>
-    <polygon points="32,52 50,42 50,45 32,55" fill="#BBA275"/>
-    <g stroke="#8C6A4A" stroke-width="2.2" stroke-linecap="round">
-      <path d="M18 38v10M26 34v10M40 34v10M48 38v10"/>
-      <path d="M18 41l30-10M18 45l30-10" stroke-width="1.6" opacity=".8"/>
-    </g>
-    <g fill="#6B8E4E"><circle cx="22" cy="49" r="1.6"/><circle cx="27" cy="51" r="1.3"/><circle cx="43" cy="49" r="1.5"/></g>
-  </svg>`,
-  /* Lv1 单间平房 */
-  1: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-    <ellipse cx="32" cy="54" rx="17" ry="5" fill="#000" opacity=".12"/>
-    <polygon points="17,40 32,47 32,56 17,49" fill="#D8C7A6"/>
-    <polygon points="32,47 47,40 47,49 32,56" fill="#EADCC0"/>
-    <polygon points="17,40 32,33 47,40 32,47" fill="#8C5A44"/>
-    <polygon points="17,40 32,33 32,35 17,42" fill="#6E4534"/>
-    <polygon points="29,50 35,53 35,56 29,53" fill="#5C4033"/>
-    <rect x="21" y="44" width="4" height="4" fill="#7FA8C9" transform="skewY(26) translate(0,-12)"/>
-  </svg>`,
-  /* Lv2 两层平房 */
-  2: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-    <ellipse cx="32" cy="55" rx="17" ry="5" fill="#000" opacity=".12"/>
-    <polygon points="18,32 32,39 32,56 18,49" fill="#D8C7A6"/>
-    <polygon points="32,39 46,32 46,49 32,56" fill="#EADCC0"/>
-    <polygon points="18,32 32,25 46,32 32,39" fill="#8C5A44"/>
-    <g fill="#5C7A96">
-      <polygon points="22,36 27,38.5 27,42 22,39.5"/>
-      <polygon points="36,41 42,38 42,41.5 36,44.5"/>
-      <polygon points="22,44 27,46.5 27,50 22,47.5"/>
-      <polygon points="36,49 42,46 42,49.5 36,52.5"/>
-    </g>
-    <polygon points="29,50 35,53 35,56 29,53" fill="#5C4033"/>
-  </svg>`,
-  /* Lv3 公寓楼 */
-  3: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-    <ellipse cx="32" cy="56" rx="15" ry="4.5" fill="#000" opacity=".12"/>
-    <polygon points="21,16 32,22 32,56 21,50" fill="#DCD5C6"/>
-    <polygon points="32,22 43,16 43,50 32,56" fill="#EFE9DC"/>
-    <polygon points="21,16 32,10 43,16 32,22" fill="#8C8477"/>
-    <g fill="#5C7A96">
-      <polygon points="24,22 29,24.5 29,27 24,24.5"/>
-      <polygon points="35,24.5 40,22 40,24.5 35,27"/>
-      <polygon points="24,30 29,32.5 29,35 24,32.5"/>
-      <polygon points="35,32.5 40,30 40,32.5 35,35"/>
-      <polygon points="24,38 29,40.5 29,43 24,40.5"/>
-      <polygon points="35,40.5 40,38 40,40.5 35,43"/>
-      <polygon points="24,46 29,48.5 29,51 24,48.5"/>
-      <polygon points="35,48.5 40,46 40,48.5 35,51"/>
-    </g>
-    <polygon points="29,50 35,53 35,56 29,53" fill="#4A5560"/>
-  </svg>`,
-  /* Lv4 写字楼 */
-  4: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-    <ellipse cx="32" cy="57" rx="14" ry="4" fill="#000" opacity=".14"/>
-    <polygon points="23,8 32,13 32,57 23,52" fill="#8FB6D4"/>
-    <polygon points="32,13 41,8 41,52 32,57" fill="#BBD8EC"/>
-    <polygon points="23,8 32,3 41,8 32,13" fill="#E4F1F9"/>
-    <g stroke="#3A4A5A" stroke-width="1" opacity=".55">
-      <path d="M23 16l18-9M23 24l18-9M23 32l18-9M23 40l18-9M23 48l18-9"/>
-      <path d="M27 5.5v50M36 9.5v50" stroke-width=".8"/>
-    </g>
-    <polygon points="29,52 35,55 35,57 29,54" fill="#2E3A45"/>
-  </svg>`,
-  /* Lv5 商业综合体 */
-  5: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-    <ellipse cx="32" cy="57" rx="21" ry="5" fill="#000" opacity=".14"/>
-    <polygon points="12,40 32,50 32,57 12,47" fill="#6E7C88"/>
-    <polygon points="32,50 52,40 52,47 32,57" fill="#8B99A6"/>
-    <polygon points="12,40 32,30 52,40 32,50" fill="#B6C3CE"/>
-    <polygon points="20,24 27,27.5 27,44 20,40.5" fill="#8FA9BE"/>
-    <polygon points="27,27.5 34,24 34,40.5 27,44" fill="#C3D8E8"/>
-    <polygon points="20,24 27,20.5 34,24 27,27.5" fill="#E8B23A"/>
-    <polygon points="36,18 42,21 42,44 36,41" fill="#8FA9BE"/>
-    <polygon points="42,21 48,18 48,41 42,44" fill="#C3D8E8"/>
-    <polygon points="36,18 42,15 48,18 42,21" fill="#E8B23A"/>
-    <g fill="#F2D27A" opacity=".9">
-      <polygon points="16,44 22,47 22,49 16,46"/>
-      <polygon points="38,46 44,43 44,45 38,48"/>
-    </g>
-  </svg>`,
+  0: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="13 38 38 22"><ellipse cx="32" cy="55" rx="15" ry="3.4" fill="#000" opacity=".13"/><polygon points="17,50 32,56 32,58 17,52" fill="#A98F66"/><polygon points="32,56 47,50 47,52 32,58" fill="#BBA275"/><polygon points="17,50 32,44 47,50 32,56" fill="#C9B48C"/><g stroke="#8C6A4A" stroke-width="2" stroke-linecap="round"><path d="M20 47v8M28 44v8M36 44v8M44 47v8"/><path d="M20 50l24-8M20 54l24-8" stroke-width="1.4" opacity=".7"/></g><g fill="#6B8E4E"><circle cx="23" cy="52" r="1.5"/><circle cx="30" cy="54.5" r="1.2"/><circle cx="41" cy="51" r="1.4"/></g></svg>`,
+  1: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="16 32 32 26"><ellipse cx="32" cy="55" rx="15" ry="3.4" fill="#000" opacity=".13"/><polygon points="17,50 32,56 32,46 17,40" fill="#D8C7A6"/><polygon points="32,56 47,50 47,40 32,46" fill="#EADCC0"/><polygon points="17,40 32,34 47,40 32,46" fill="#8C5A44"/><polygon points="17,40 32,34 32,46 17,40" fill="#6E4534" opacity=".5"/><polygon points="35,50 41,47 41,50 35,53" fill="#5C4033"/><polygon points="21,46.5 25,48.5 25,51 21,49" fill="#7FA8C9" opacity=".9"/></svg>`,
+  2: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="16 24 32 34"><ellipse cx="32" cy="55" rx="15" ry="3.4" fill="#000" opacity=".13"/><polygon points="17,50 32,56 32,36 17,30" fill="#D8C7A6"/><polygon points="32,56 47,50 47,30 32,36" fill="#EADCC0"/><polygon points="17,41 32,47 47,41 32,35" fill="#CBB894"/><polygon points="17,30 32,24 47,30 32,36" fill="#8C5A44"/><polygon points="17,30 32,24 32,36 17,30" fill="#6E4534" opacity=".5"/><polygon points="19.7,48.3 22.7,49.5 22.7,45.7 19.7,44.5" fill="#5C7A96"/><polygon points="24.5,50.2 27.5,51.4 27.5,47.6 24.5,46.5" fill="#5C7A96"/><polygon points="19.7,41.1 22.7,42.3 22.7,38.5 19.7,37.3" fill="#5C7A96"/><polygon points="24.5,43.0 27.5,44.2 27.5,40.4 24.5,39.3" fill="#5C7A96"/><polygon points="34.7,52.1 40.7,49.7 40.7,46.0 34.7,48.4" fill="#5C7A96"/><polygon points="34.7,44.9 40.7,42.5 40.7,38.8 34.7,41.2" fill="#5C7A96"/><polygon points="35,50 41,47 41,50 35,53" fill="#5C4033"/></svg>`,
+  3: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="16 6 32 52"><ellipse cx="32" cy="55" rx="15" ry="3.4" fill="#000" opacity=".13"/><polygon points="17,50 32,56 32,22 17,16" fill="#DCD5C6"/><polygon points="32,56 47,50 47,16 32,22" fill="#EFE9DC"/><polygon points="17,16 32,10 47,16 32,22" fill="#8C8477"/><polygon points="17,16 32,10 32,22 17,16" fill="#B7AFA2" opacity=".45"/><polygon points="19.7,46.3 22.7,47.5 22.7,44.3 19.7,43.1" fill="#5C7A96"/><polygon points="24.5,48.2 27.5,49.4 27.5,46.2 24.5,45.1" fill="#5C7A96"/><polygon points="19.7,40.2 22.7,41.4 22.7,38.2 19.7,37.0" fill="#5C7A96"/><polygon points="24.5,42.1 27.5,43.3 27.5,40.1 24.5,38.9" fill="#5C7A96"/><polygon points="19.7,34.1 22.7,35.3 22.7,32.1 19.7,30.9" fill="#5C7A96"/><polygon points="24.5,36.0 27.5,37.2 27.5,34.0 24.5,32.8" fill="#5C7A96"/><polygon points="19.7,28.0 22.7,29.2 22.7,26.0 19.7,24.8" fill="#5C7A96"/><polygon points="24.5,29.9 27.5,31.1 27.5,27.9 24.5,26.7" fill="#5C7A96"/><polygon points="34.7,50.2 40.7,47.8 40.7,44.6 34.7,47.0" fill="#5C7A96"/><polygon points="34.7,44.0 40.7,41.7 40.7,38.5 34.7,40.9" fill="#5C7A96"/><polygon points="34.7,37.9 40.7,35.5 40.7,32.4 34.7,34.7" fill="#5C7A96"/><polygon points="34.7,31.8 40.7,29.4 40.7,26.2 34.7,28.6" fill="#5C7A96"/><polygon points="32,44 32,56 35,54.5 35,42.5" fill="#4A5560"/></svg>`,
+  4: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="16 0 32 58"><ellipse cx="32" cy="55" rx="15" ry="3.4" fill="#000" opacity=".13"/><polygon points="17,50 32,56 32,14 17,8" fill="#8FB6D4"/><polygon points="32,56 47,50 47,8 32,14" fill="#BBD8EC"/><polygon points="17,8 32,2 47,8 32,14" fill="#E4F1F9"/><g stroke="#3A4A5A" stroke-width=".8" opacity=".5"><path d="M17,46 47,46"/><path d="M17,42 47,42"/><path d="M17,38 47,38"/><path d="M17,34 47,34"/><path d="M17,30 47,30"/><path d="M17,26 47,26"/><path d="M17,22 47,22"/><path d="M17,18 47,18"/><path d="M17,14 47,14"/><path d="M17,10 47,10"/><path d="M32,44 32,2"/></g><polygon points="17,8 32,2 32,14 17,8" fill="#6E94B0" opacity=".4"/><polygon points="32,44 32,56 36,54 36,42" fill="#2E3A45"/></svg>`,
+  5: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="18 12 28 46"><ellipse cx="32" cy="55" rx="15" ry="3.4" fill="#000" opacity=".13"/><polygon points="17,50 32,56 32,44 17,38" fill="#6E7C88"/><polygon points="32,56 47,50 47,38 32,44" fill="#8B99A6"/><polygon points="17,38 32,32 47,38 32,44" fill="#B6C3CE"/><polygon points="17,38 32,32 32,44 17,38" fill="#5A6874" opacity=".5"/><polygon points="20,38 26,41 26,15 20,12" fill="#8FA9BE"/><polygon points="26,41 32,38 32,12 26,15" fill="#C3D8E8"/><polygon points="20,12 26,15 32,12 26,9" fill="#E8B23A"/><polygon points="34,38 39,40.5 39,18.5 34,16" fill="#8FA9BE"/><polygon points="39,40.5 44,38 44,16 39,18.5" fill="#C3D8E8"/><polygon points="34,16 39,18.5 44,16 39,13.5" fill="#E8B23A"/><g fill="#F2D27A" opacity=".85"><polygon points="19,47 24,49.5 24,51 19,48.5"/><polygon points="40,48.5 45,46 45,47.5 40,50"/></g></svg>`
 };
 
 
@@ -273,6 +196,52 @@ function injectBuildingAssets(){
 }
 
 /* ---------------- 建盘 ---------------- */
+/* ---------------- 方形棋盘坐标（V2.2） ----------------
+   24 格排在 9×9 网格的外圈上，监狱固定在正中心。
+   网格里同时留出一圈「建筑带」（row1 / row9 / col1 / col9），
+   房子画在格子外侧，不占格子内部空间。
+
+   顺时针从起点（上排正中）出发：
+     idx 0—3   上排向右      idx 4—8   右列向下
+     idx 9—15  下排向左      idx 16—20 左列向上
+     idx 21—23 上排补完
+----------------------------------------------------- */
+const WALK_LEN = 24;                 // 环上可走的格子数，不含监狱
+const JAIL_IDX = 24;                 // 监狱在 cells 里的下标
+const JAIL_EXIT = 12;                // 出狱后从证券格起步（监狱正下方）
+const GRID_N = 9;                    // 9×9 网格
+
+const RING_GRID = (() => {
+  const g = [];
+  g[0] = [5, 2];
+  for (let i = 1; i <= 3; i++) g[i] = [5 + i, 2];           // 上排向右
+  for (let i = 4; i <= 8; i++) g[i] = [8, 2 + (i - 3)];     // 右列向下
+  for (let i = 9; i <= 15; i++) g[i] = [8 - (i - 9), 8];    // 下排向左
+  for (let i = 16; i <= 20; i++) g[i] = [2, 8 - (i - 15)];  // 左列向上
+  for (let i = 21; i <= 23; i++) g[i] = [2 + (i - 21), 2];  // 上排补完
+  g[JAIL_IDX] = [5, 5];                                     // 监狱：正中心
+  return g;
+})();
+
+const gridOf = i => RING_GRID[i] || [5, 5];
+
+/* 格子中心的百分比坐标（格子占满 1/GRID_N 的格子位） */
+function cellCenter(i){
+  const [c, r] = gridOf(i);
+  return { x: (c - 0.5) / GRID_N * 100, y: (r - 0.5) / GRID_N * 100 };
+}
+
+/* 建筑槽：每个地块外侧紧邻的一格（上→row1，右→col9，下→row9，左→col1）。
+   地块都不会落在四角，所以四个方向总有一个可用。 */
+function slotOf(i){
+  const [c, r] = gridOf(i);
+  if (r === 2) return [c, 1];
+  if (c === 8) return [9, r];
+  if (r === 8) return [c, 9];
+  if (c === 2) return [1, r];
+  return null;
+}
+
 function buildRings(){
   state.rings = RINGS.map((ring, ri) => {
     const cells = TRACK_PATTERN.map((token, idx) => {
@@ -286,7 +255,6 @@ function buildRings(){
           boughtAt:-99, broken:false, boost:0, discount:1
         };
       }
-      if (token === "jail") return { t:"jail", name:"监狱", fullName:"监狱", ring:ri, idx };
       if (token === "scenic"){
         const sc = SCENIC[ri] || SCENIC[0];
         return { t:"scenic", name:sc.short, fullName:sc.full, ring:ri, idx };
@@ -294,6 +262,8 @@ function buildRings(){
       const label = { chance:"机会", fate:"命运", bank:"银行", stock:"证券", shop:"道具店" }[token];
       return { t:token, name:label, ring:ri, idx };
     });
+    /* 监狱不在行走路径上：挂在末尾，只有机会/命运卡能把人送进来 */
+    cells.push({ t:"jail", name:"监狱", fullName:"监狱", ring:ri, idx:cells.length });
     return { cells, name:ring.name, years:ring.years };
   });
 }
@@ -337,7 +307,8 @@ function rentOf(c){
 }
 /* 连片加成：环上相邻（序号 ±1）同主则 ×2；跨起点不算相邻；不叠乘 */
 function neighbors(c){
-  const cells = state.rings[c.ring].cells, n = cells.length;
+  const cells = state.rings[c.ring].cells, n = WALK_LEN;
+  if (c.idx >= n) return [];                 // 监狱不在环上，没有邻居
   return [cells[(c.idx - 1 + n) % n], cells[(c.idx + 1) % n]]
     .filter(x => x && x.idx !== 0);          // idx 0 是起点，隔断首尾
 }
@@ -811,27 +782,40 @@ function renderBoard(){
   const wrap = $("#boardWrap");
   /* 底图换成当前章节结束年份的地铁线网 */
   wrap.style.setProperty("--metro", `var(--metro${state.chapter})`);
-  wrap.querySelectorAll(".cell,.token,.oldring").forEach(n => n.remove());
+  wrap.querySelectorAll(".cell,.token,.oldring,.bslot,.jailwire,.chainlink").forEach(n => n.remove());
   const cells = curCells();
-  const n = cells.length, R = 43;
 
-  // 旧环示意
-  state.rings.forEach((r, i) => {
-    if (i >= state.chapter) return;
-    const d = document.createElement("div");
-    d.className = "oldring";
-    const scale = 62 - i * 12;
-    d.style.width = scale + "%"; d.style.height = scale + "%";
-    wrap.appendChild(d);
+  /* 旧环不再画成内嵌圆环：方形棋盘里圆形只会干扰视线，
+     已沉降环的信息在 HUD 的「旧环资产」里给出。 */
+
+  /* 建筑槽：每个地块外侧紧邻的一格，常驻。
+     空地是虚线空框，买入并建房后槽里出现对应等级的房子。
+     房子画在格子外面，所以格子能把名字完整显示出来。 */
+  cells.forEach((cell, i) => {
+    if (cell.t !== "plot") return;
+    const slot = slotOf(i);
+    if (!slot) return;
+    const el = document.createElement("div");
+    el.className = "bslot empty";
+    el.dataset.i = i;
+    el.style.setProperty("--c", slot[0]);
+    el.style.setProperty("--r", slot[1]);
+    wrap.appendChild(el);
   });
 
+  // 监狱与正下方证券格之间的双线
+  const wire = document.createElement("div");
+  wire.className = "jailwire";
+  wrap.appendChild(wire);
+
   cells.forEach((cell, i) => {
-    const a = (-90 + i * 360 / n) * Math.PI / 180;
+    const [c, r] = gridOf(i);
     const el = document.createElement("div");
     el.className = "cell " + (cell.t === "plot" ? "land" : "special");
+    if (i === JAIL_IDX) el.classList.add("jailcell");
     el.dataset.i = i;
-    el.style.left = (50 + R * Math.cos(a)) + "%";
-    el.style.top = (50 + R * Math.sin(a)) + "%";
+    el.style.setProperty("--c", c);
+    el.style.setProperty("--r", r);
     el.onclick = () => onCellClick(cell);
     el.innerHTML = cell.t === "plot"
       ? `<span class="nm">${cell.name}</span><span class="bar"></span>`
@@ -878,18 +862,21 @@ function renderCells(){
 function renderBuildings(){
   const wrap = $("#boardWrap");
   if (!wrap) return;
-  wrap.querySelectorAll(".bld").forEach(n => n.remove());
-  const cells = curCells(), n = cells.length;
-  const Rb = 35;                       // 建筑所在半径（%）；格子 43%，留出「格子半径+建筑半径」的空隙
-  cells.forEach((c, i) => {
+  wrap.querySelectorAll(".bslot").forEach(slot => {
+    slot.querySelectorAll(".bld").forEach(n => n.remove());
+    slot.classList.add("empty");
+    slot.style.removeProperty("--owner");
+  });
+  curCells().forEach((c, i) => {
     if (c.t !== "plot" || !c.owner || c.lv <= 0 || c.broken) return;
-    const a = (-90 + i * 360 / n) * Math.PI / 180;
+    const slot = wrap.querySelector(`.bslot[data-i="${i}"]`);
+    if (!slot) return;
+    slot.classList.remove("empty");
+    slot.style.setProperty("--owner", c.owner.color);
     const d = document.createElement("div");
     d.className = "bld";
     d.dataset.lv = c.lv;
-    d.style.left = (50 + Rb * Math.cos(a)) + "%";
-    d.style.top = (50 + Rb * Math.sin(a)) + "%";
-    wrap.appendChild(d);
+    slot.appendChild(d);
   });
 }
 
@@ -898,55 +885,33 @@ function renderBuildings(){
 function renderChains(){
   const wrap = $("#boardWrap");
   if (!wrap) return;
+  /* 方形棋盘不再画中心连线：格子之间只有 6px 缝隙，线会从缝里漏出来，
+     看起来像"名字被一道竖线穿过"。连片改由格子自身表达——
+     .chain 类做呼吸描边，右上角挂 ×2 角标。 */
   wrap.querySelectorAll(".chainlink").forEach(n => n.remove());
-  const cells = curCells(), n = cells.length, R = 43;
-  const W = wrap.clientWidth || 400;
-  const Rp = R / 100 * W;              // 环半径（像素）
-  const railR = Rp - Math.max(26, W * 0.062);   // 画在环内侧的空白区，不压格子也不出界
-  cells.forEach((c, i) => {
-    if (c.t !== "plot" || !c.owner) return;
-    if (i === n - 1) return;                       // 首尾不连（跨起点）
-    const nb = cells[(i + 1) % n];
-    if (nb.t !== "plot" || nb.owner !== c.owner) return;
-
-    const a1 = (-90 + i * 360 / n) * Math.PI / 180;
-    const a2 = (-90 + (i + 1) * 360 / n) * Math.PI / 180;
-    const x1 = W / 2 + railR * Math.cos(a1), y1 = W / 2 + railR * Math.sin(a1);
-    const x2 = W / 2 + railR * Math.cos(a2), y2 = W / 2 + railR * Math.sin(a2);
-    const dx = x2 - x1, dy = y2 - y1;
-    const len = Math.hypot(dx, dy);
-    if (len < 6) return;
-    const d = document.createElement("div");
-    d.className = "chainlink";
-    d.style.cssText = `left:${x1}px;top:${y1}px;width:${len}px;transform:rotate(${Math.atan2(dy, dx) * 180 / Math.PI}deg);background:${c.owner.color}`;
-    wrap.appendChild(d);
-  });
 }
 
 function renderTokens(){
   const wrap = $("#boardWrap");
   wrap.querySelectorAll(".token").forEach(n => n.remove());
-  const n = curCells().length, R = 43;
   const by = {};
   state.players.forEach(p => { if (!p.bankrupt) (by[p.pos] = by[p.pos] || []).push(p); });
   const cur = state.players[state.turnIdx];
   Object.keys(by).forEach(idx => {
-    const a = (-90 + idx * 360 / n) * Math.PI / 180;
-    const bx = 50 + R * Math.cos(a), byy = 50 + R * Math.sin(a);
+    const c = cellCenter(+idx);
     const list = by[idx], cnt = list.length;
     list.forEach((p, k) => {
       const t = document.createElement("div");
       t.className = "token" + (p === cur && !state.over ? " active" : "");
       t.style.color = p.color;
       t.textContent = PIECE[p.id] || "♟";
-      // 同格多人时缩小并横向排开，避免叠在一起看不清
-      /* 大屏棋盘放大，棋子按容器宽度等比跟上 */
-      const scale = Math.min(1.35, Math.max(1, (wrap.clientWidth || 400) / 400));
-      const size = Math.round((cnt === 1 ? 27 : cnt === 2 ? 24 : 21) * scale);
+      /* 方形棋盘格子约 40px，棋子比圆环版收一档，免得盖住地块名 */
+      const scale = Math.min(1.3, Math.max(1, (wrap.clientWidth || 400) / 400));
+      const size = Math.round((cnt === 1 ? 19 : cnt === 2 ? 17 : 15) * scale);
       t.style.fontSize = size + "px";
-      const dx = cnt > 1 ? (k - (cnt - 1) / 2) * (size * 0.78) : 0;
-      t.style.left = `calc(${bx}% + ${dx}px)`;
-      t.style.top = `calc(${byy}% + 11px)`;
+      const dx = cnt > 1 ? (k - (cnt - 1) / 2) * (size * 0.72) : 0;
+      t.style.left = `calc(${c.x}% + ${dx}px)`;
+      t.style.top = `${c.y}%`;
       wrap.appendChild(t);
     });
   });
@@ -1549,7 +1514,9 @@ function payPassGo(p, how){
 }
 
 async function move(p, steps, dir = 1){
-  const cells = curCells(), n = cells.length;
+  const cells = curCells(), n = WALK_LEN;
+  /* 关押中出发（刚出狱）：先归位到监狱正下方的证券格 */
+  if (p.pos >= n) p.pos = JAIL_EXIT;
   for (let i = 0; i < steps; i++){
     const prev = p.pos;
     p.pos = (p.pos + dir + n) % n;
@@ -1685,8 +1652,7 @@ function rollScenicStay(){
 }
 
 function sendToJail(p, reason){
-  const j = curCells().findIndex(x => x.t === "jail");
-  if (j >= 0) p.pos = j;
+  p.pos = JAIL_IDX;                     // 监狱不在环上，位置直接指过去
   p.inJail = true; p.jailFail = 0; p.scenicTurns = 0;
   renderTokens(); renderHUD();
   log(`<b>${p.name}</b> ${reason || "被带走调查"}，需掷出偶数才能继续前进`, "bad");
@@ -1974,8 +1940,9 @@ function aiPreTurn(p){
    和人类用同一套接口，只是判据是启发式。不给 AI 用会直接导致人类碾压。
 */
 function cellAhead(p, k){
-  const cells = curCells(), n = cells.length;
-  return cells[((p.pos + k) % n + n) % n];
+  const cells = curCells(), n = WALK_LEN;
+  const base = p.pos >= n ? JAIL_EXIT : p.pos;   // 关押中按出狱位置估算
+  return cells[((base + k) % n + n) % n];
 }
 function tollAhead(p, k){
   const c = cellAhead(p, k);

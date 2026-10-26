@@ -206,6 +206,7 @@ const EXPORTS = [
   // 纯函数 / 业务函数
   'year', 'monthLabel', 'curCh', 'chapterMonth', 'buildRings', 'curCells', 'allCells', 'owned',
   'curRegions', 'hottestRegions', 'shopPrice', 'askShop', 'enterShop',
+  'WALK_LEN', 'JAIL_IDX', 'JAIL_EXIT', 'RING_GRID', 'gridOf', 'cellCenter', 'slotOf',
   'eraF', 'heatF', 'value', 'rentOf', 'neighbors', 'adjacentBonus', 'adjCount', 'sandwichedOwner',
   'tollParts', 'tollOf', 'leverage', 'cappedFor', 'tollFor', 'upCost', 'estateValue', 'netWorth', 'loanCap', 'loanRate',
   'hasPolicy', 'setPolicy', 'extendPolicy', 'clearPolicy', 'heatAdd', 'raiseCap', 'triggerStall',
